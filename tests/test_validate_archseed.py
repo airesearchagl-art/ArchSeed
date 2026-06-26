@@ -64,8 +64,11 @@ def test_sketchup_loader_avoids_forbidden_execution_apis() -> None:
         "eval(",
         "instance_eval",
         "module_eval",
+        "class_eval",
         "system(",
+        "exec(",
+        "spawn(",
         "`",
-      ]
+    ]
     for token in forbidden_tokens:
         assert token not in source

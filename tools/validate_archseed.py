@@ -122,7 +122,9 @@ def validate_archseed(data: Any) -> dict[str, Any]:
             if not isinstance(height, (int, float)) or isinstance(height, bool):
                 raise ValidationError("$.building.roof.parapetHeight must be a number")
             if height < 0 or height > 2000:
-                raise ValidationError("$.building.roof.parapetHeight must be >= 0 and <= 2000")
+                raise ValidationError(
+                    "$.building.roof.parapetHeight must be >= 0 and <= 2000"
+                )
 
     return root
 
@@ -134,7 +136,10 @@ def load_json(path: Path) -> Any:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
-        print("Usage: python tools/validate_archseed.py <path-to-archseed-json>", file=sys.stderr)
+        print(
+            "Usage: python tools/validate_archseed.py <path-to-archseed-json>",
+            file=sys.stderr,
+        )
         return 2
 
     path = Path(argv[1])

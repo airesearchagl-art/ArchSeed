@@ -30,6 +30,10 @@ tests/                       Python tests for validation and safety checks
 
 ## Quick Start
 
+ArchSeed v0.1 includes a JSON Schema reference and a small Python validator.
+The current Python validator implements the v0.1 validation rules directly.
+A future version may switch to validating directly against the JSON Schema file.
+
 Validate the sample JSON:
 
 ```powershell
@@ -64,7 +68,10 @@ The SketchUp Ruby loader must not use:
 - `eval`
 - `instance_eval`
 - `module_eval`
+- `class_eval`
 - `system`
+- `exec`
+- `spawn`
 - backtick command execution
 - arbitrary shell execution
 - AI-generated Ruby code execution
