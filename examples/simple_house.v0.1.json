@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "archseed.v0.1",
+  "units": "mm",
+  "project": {
+    "name": "Simple House v0.1",
+    "description": "Minimal rectangular two-level building sample."
+  },
+  "building": {
+    "footprint": {
+      "width": 7200,
+      "depth": 5400
+    },
+    "levels": [
+      {
+        "name": "Level 1",
+        "height": 3000
+      },
+      {
+        "name": "Level 2",
+        "height": 2800
+      }
+    ],
+    "wallThickness": 150,
+    "slabThickness": 180,
+    "roof": {
+      "type": "flat",
+      "parapetHeight": 300
+    }
+  }
+}

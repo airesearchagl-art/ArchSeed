@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/airesearchagl-art/ArchSeed/schemas/archseed.v0.1.schema.json",
+  "title": "ArchSeed v0.1",
+  "type": "object",
+  "required": ["schemaVersion", "units", "project", "building"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "archseed.v0.1"
+    },
+    "units": {
+      "const": "mm"
+    },
+    "project": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "building": {
+      "type": "object",
+      "required": ["footprint", "levels"],
+      "additionalProperties": false,
+      "properties": {
+        "footprint": {
+          "type": "object",
+          "required": ["width", "depth"],
+          "additionalProperties": false,
+          "properties": {
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 200000
+            },
+            "depth": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 200000
+            }
+          }
+        },
+        "levels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "required": ["name", "height"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 10000
+              }
+            }
+          }
+        },
+        "wallThickness": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "default": 150
+        },
+        "slabThickness": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "default": 180
+        },
+        "roof": {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": ["flat"]
+            },
+            "parapetHeight": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2000,
+              "default": 300
+            }
+          }
+        }
+      }
+    }
+  }
+}

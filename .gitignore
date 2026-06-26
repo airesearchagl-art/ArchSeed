@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Large binary/model artifacts
+*.skp
+*.skb
+*.mp4
+*.mov
+*.avi
+*.zip
+
+# Generated exports
+exports/
+dist/
