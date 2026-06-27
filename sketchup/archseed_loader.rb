@@ -3,10 +3,10 @@
 require 'json'
 
 module ArchSeed
-  MM_TO_INCH = 1.0 / 25.4
-  DEFAULT_WALL_THICKNESS_MM = 150.0
-  DEFAULT_SLAB_THICKNESS_MM = 180.0
-  DEFAULT_PARAPET_HEIGHT_MM = 300.0
+  MM_TO_INCH = 1.0 / 25.4 unless const_defined?(:MM_TO_INCH, false)
+  DEFAULT_WALL_THICKNESS_MM = 150.0 unless const_defined?(:DEFAULT_WALL_THICKNESS_MM, false)
+  DEFAULT_SLAB_THICKNESS_MM = 180.0 unless const_defined?(:DEFAULT_SLAB_THICKNESS_MM, false)
+  DEFAULT_PARAPET_HEIGHT_MM = 300.0 unless const_defined?(:DEFAULT_PARAPET_HEIGHT_MM, false)
 
   module_function
 

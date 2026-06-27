@@ -88,3 +88,15 @@ def test_sketchup_loader_builds_named_editable_geometry_groups() -> None:
     assert "add_slab(floor_group.entities" in source
     assert "add_walls(walls_group.entities" in source
     assert "add_roof(roof_group.entities" in source
+
+
+def test_sketchup_loader_constants_are_reload_safe() -> None:
+    source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
+    constants = [
+        "MM_TO_INCH",
+        "DEFAULT_WALL_THICKNESS_MM",
+        "DEFAULT_SLAB_THICKNESS_MM",
+        "DEFAULT_PARAPET_HEIGHT_MM",
+    ]
+    for constant in constants:
+        assert f"unless const_defined?(:{constant}, false)" in source
