@@ -72,3 +72,19 @@ def test_sketchup_loader_avoids_forbidden_execution_apis() -> None:
     ]
     for token in forbidden_tokens:
         assert token not in source
+
+
+def test_sketchup_loader_builds_named_editable_geometry_groups() -> None:
+    source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
+    expected_group_names = [
+        "ArchSeed Building - #{project_name}",
+        "ArchSeed Floor",
+        "ArchSeed Walls",
+        "ArchSeed Roof",
+    ]
+    for name in expected_group_names:
+        assert name in source
+
+    assert "add_slab(floor_group.entities" in source
+    assert "add_walls(walls_group.entities" in source
+    assert "add_roof(roof_group.entities" in source

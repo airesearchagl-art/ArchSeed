@@ -18,6 +18,14 @@ architectural JSON
 - Build a simple SketchUp model from fixed Ruby functions.
 - Avoid dynamic code execution in SketchUp Ruby.
 
+## v0.2 Editable Geometry
+
+ArchSeed v0.1.0 generated the complete building geometry inside one group.
+The first v0.2 improvement keeps an overall building group while splitting its
+contents into named floor, walls, and roof groups. This makes each geometry
+category easier to select and edit in SketchUp without changing the v0.1 JSON
+format or import flow.
+
 ## Repository Layout
 
 ```text
@@ -76,4 +84,4 @@ The SketchUp Ruby loader must not use:
 - arbitrary shell execution
 - AI-generated Ruby code execution
 
-The v0.1 importer parses JSON data only and maps it to fixed geometry functions.
+The importer parses JSON data only and maps it to fixed geometry functions.
