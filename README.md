@@ -26,6 +26,21 @@ contents into named floor, walls, and roof groups. This makes each geometry
 category easier to select and edit in SketchUp without changing the v0.1 JSON
 format or import flow.
 
+### Geometry Dimension Rules
+
+- JSON dimensions are millimeters and are converted to SketchUp inches.
+- A level `height` is the floor-to-floor distance from its slab bottom to the
+  next level or roof slab bottom.
+- The floor slab starts at the level base and uses `slabThickness` (default:
+  180 mm).
+- Walls start at the floor slab top and stop at the level top. Their clear
+  generated height is therefore `level height - slab thickness`.
+- Wall depth uses `wallThickness` (default: 150 mm).
+- The flat roof slab starts at the final level top and uses the slab thickness.
+- The parapet starts at the roof slab top and uses `parapetHeight` (default:
+  300 mm).
+- Floor, walls, and roof remain separate named groups inside the building group.
+
 ## Repository Layout
 
 ```text
