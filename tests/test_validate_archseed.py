@@ -92,11 +92,29 @@ def test_sketchup_loader_builds_named_editable_geometry_groups() -> None:
 
 def test_sketchup_loader_constants_are_reload_safe() -> None:
     source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
-    constants = [
-        "MM_TO_INCH",
-        "DEFAULT_WALL_THICKNESS_MM",
-        "DEFAULT_SLAB_THICKNESS_MM",
-        "DEFAULT_PARAPET_HEIGHT_MM",
+    constants = {
+        "MM_TO_INCH": "1.0 / 25.4",
+        "DEFAULT_WALL_THICKNESS_MM": "150.0",
+        "DEFAULT_SLAB_THICKNESS_MM": "180.0",
+        "DEFAULT_PARAPET_HEIGHT_MM": "300.0",
+    }
+    for constant, value in constants.items():
+        definition = f"{constant} = {value} unless const_defined?(:{constant}, false)"
+        assert definition in source
+
+
+def test_sketchup_loader_geometry_dimension_rules_are_explicit() -> None:
+    source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
+    expected_rules = [
+        "floor_bottom_z = level_bottom_z",
+        "floor_top_z = floor_bottom_z + slab",
+        "wall_bottom_z = floor_top_z",
+        "wall_top_z = level_bottom_z + story_height",
+        "wall_height = wall_top_z - wall_bottom_z",
+        "roof_bottom_z = level_bottom_z",
+        "roof_top_z = roof_bottom_z + slab",
     ]
-    for constant in constants:
-        assert f"unless const_defined?(:{constant}, false)" in source
+    for rule in expected_rules:
+        assert rule in source
+
+    assert "height must exceed slab thickness" in source

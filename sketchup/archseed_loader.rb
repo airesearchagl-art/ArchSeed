@@ -61,15 +61,25 @@ module ArchSeed
     walls_group = add_named_group(building_group.entities, 'ArchSeed Walls')
     roof_group = add_named_group(building_group.entities, 'ArchSeed Roof')
 
-    z = 0.0
+    level_bottom_z = 0.0
     building.fetch('levels').each do |level|
-      height = mm(level.fetch('height'))
-      add_slab(floor_group.entities, width, depth, slab, z)
-      add_walls(walls_group.entities, width, depth, wall, height, z + slab)
-      z += height
+      story_height = mm(level.fetch('height'))
+      floor_bottom_z = level_bottom_z
+      floor_top_z = floor_bottom_z + slab
+      wall_bottom_z = floor_top_z
+      wall_top_z = level_bottom_z + story_height
+      wall_height = wall_top_z - wall_bottom_z
+      unless wall_height.positive?
+        raise ArgumentError, "#{level.fetch('name')} height must exceed slab thickness"
+      end
+
+      add_slab(floor_group.entities, width, depth, slab, floor_bottom_z)
+      add_walls(walls_group.entities, width, depth, wall, wall_height, wall_bottom_z)
+      level_bottom_z = wall_top_z
     end
 
-    add_roof(roof_group.entities, building, width, depth, wall, slab, z)
+    roof_bottom_z = level_bottom_z
+    add_roof(roof_group.entities, building, width, depth, wall, slab, roof_bottom_z)
     model.commit_operation
   rescue StandardError
     model.abort_operation if model
@@ -93,13 +103,14 @@ module ArchSeed
     add_box(entities, [width - wall, wall, base_z], wall, depth - (wall * 2), height)
   end
 
-  def add_roof(entities, building, width, depth, wall, slab, z)
-    add_box(entities, [0, 0, z], width, depth, slab)
+  def add_roof(entities, building, width, depth, wall, slab, roof_bottom_z)
+    roof_top_z = roof_bottom_z + slab
+    add_box(entities, [0, 0, roof_bottom_z], width, depth, slab)
     roof = building.fetch('roof', { 'type' => 'flat', 'parapetHeight' => DEFAULT_PARAPET_HEIGHT_MM })
     parapet_height = mm(roof.fetch('parapetHeight', DEFAULT_PARAPET_HEIGHT_MM))
     return unless parapet_height.positive?
 
-    add_walls(entities, width, depth, wall, parapet_height, z + slab)
+    add_walls(entities, width, depth, wall, parapet_height, roof_top_z)
   end
 
   def add_box(entities, origin, width, depth, height)
