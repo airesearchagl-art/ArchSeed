@@ -57,12 +57,10 @@ module ArchSeed
 
     project_name = data.fetch('project').fetch('name')
     building_group = add_named_group(model.active_entities, "ArchSeed Building - #{project_name}")
-    floor_group = add_named_group(building_group.entities, 'ArchSeed Floor')
-    walls_group = add_named_group(building_group.entities, 'ArchSeed Walls')
-    roof_group = add_named_group(building_group.entities, 'ArchSeed Roof')
 
     level_bottom_z = 0.0
     building.fetch('levels').each do |level|
+      level_name = level.fetch('name')
       story_height = mm(level.fetch('height'))
       floor_bottom_z = level_bottom_z
       floor_top_z = floor_bottom_z + slab
@@ -70,15 +68,19 @@ module ArchSeed
       wall_top_z = level_bottom_z + story_height
       wall_height = wall_top_z - wall_bottom_z
       unless wall_height.positive?
-        raise ArgumentError, "#{level.fetch('name')} height must exceed slab thickness"
+        raise ArgumentError, "#{level_name} height must exceed slab thickness"
       end
 
+      level_group = add_named_group(building_group.entities, "ArchSeed #{level_name}")
+      floor_group = add_named_group(level_group.entities, "ArchSeed Floor - #{level_name}")
+      walls_group = add_named_group(level_group.entities, "ArchSeed Walls - #{level_name}")
       add_slab(floor_group.entities, width, depth, slab, floor_bottom_z)
       add_walls(walls_group.entities, width, depth, wall, wall_height, wall_bottom_z)
       level_bottom_z = wall_top_z
     end
 
     roof_bottom_z = level_bottom_z
+    roof_group = add_named_group(building_group.entities, 'ArchSeed Roof')
     add_roof(roof_group.entities, building, width, depth, wall, slab, roof_bottom_z)
     model.commit_operation
   rescue StandardError

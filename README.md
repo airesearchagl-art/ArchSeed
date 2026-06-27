@@ -21,10 +21,27 @@ architectural JSON
 ## v0.2 Editable Geometry
 
 ArchSeed v0.1.0 generated the complete building geometry inside one group.
-The first v0.2 improvement keeps an overall building group while splitting its
-contents into named floor, walls, and roof groups. This makes each geometry
-category easier to select and edit in SketchUp without changing the v0.1 JSON
-format or import flow.
+ArchSeed v0.2 keeps an overall building group, organizes floor and wall groups
+under stable level groups, and keeps the roof as a separate group. This makes
+each level and geometry category easier to find and edit in SketchUp without
+changing the v0.1 JSON format or import flow.
+
+### Outliner Hierarchy
+
+For `examples/simple_house.v0.1.json`, the generated groups are:
+
+```text
+ArchSeed Building - Simple House v0.1
+|-- ArchSeed Level 1
+|   |-- ArchSeed Floor - Level 1
+|   `-- ArchSeed Walls - Level 1
+|-- ArchSeed Level 2
+|   |-- ArchSeed Floor - Level 2
+|   `-- ArchSeed Walls - Level 2
+`-- ArchSeed Roof
+```
+
+Level and element group names are derived from each validated JSON level name.
 
 ### Geometry Dimension Rules
 
