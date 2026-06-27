@@ -78,13 +78,18 @@ def test_sketchup_loader_builds_named_editable_geometry_groups() -> None:
     source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
     expected_group_names = [
         "ArchSeed Building - #{project_name}",
-        "ArchSeed Floor",
-        "ArchSeed Walls",
+        "ArchSeed #{level_name}",
+        "ArchSeed Floor - #{level_name}",
+        "ArchSeed Walls - #{level_name}",
         "ArchSeed Roof",
     ]
     for name in expected_group_names:
         assert name in source
 
+    assert "level_group = add_named_group(building_group.entities" in source
+    assert "floor_group = add_named_group(level_group.entities" in source
+    assert "walls_group = add_named_group(level_group.entities" in source
+    assert "roof_group = add_named_group(building_group.entities" in source
     assert "add_slab(floor_group.entities" in source
     assert "add_walls(walls_group.entities" in source
     assert "add_roof(roof_group.entities" in source
