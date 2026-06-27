@@ -3,10 +3,10 @@
 require 'json'
 
 module ArchSeed
-  MM_TO_INCH = 1.0 / 25.4
-  DEFAULT_WALL_THICKNESS_MM = 150.0
-  DEFAULT_SLAB_THICKNESS_MM = 180.0
-  DEFAULT_PARAPET_HEIGHT_MM = 300.0
+  MM_TO_INCH = 1.0 / 25.4 unless const_defined?(:MM_TO_INCH, false)
+  DEFAULT_WALL_THICKNESS_MM = 150.0 unless const_defined?(:DEFAULT_WALL_THICKNESS_MM, false)
+  DEFAULT_SLAB_THICKNESS_MM = 180.0 unless const_defined?(:DEFAULT_SLAB_THICKNESS_MM, false)
+  DEFAULT_PARAPET_HEIGHT_MM = 300.0 unless const_defined?(:DEFAULT_PARAPET_HEIGHT_MM, false)
 
   module_function
 
@@ -55,22 +55,31 @@ module ArchSeed
     wall = mm(building.fetch('wallThickness', DEFAULT_WALL_THICKNESS_MM))
     slab = mm(building.fetch('slabThickness', DEFAULT_SLAB_THICKNESS_MM))
 
-    group = model.active_entities.add_group
-    group.name = data.fetch('project').fetch('name')
+    project_name = data.fetch('project').fetch('name')
+    building_group = add_named_group(model.active_entities, "ArchSeed Building - #{project_name}")
+    floor_group = add_named_group(building_group.entities, 'ArchSeed Floor')
+    walls_group = add_named_group(building_group.entities, 'ArchSeed Walls')
+    roof_group = add_named_group(building_group.entities, 'ArchSeed Roof')
 
     z = 0.0
     building.fetch('levels').each do |level|
       height = mm(level.fetch('height'))
-      add_slab(group.entities, width, depth, slab, z)
-      add_walls(group.entities, width, depth, wall, height, z + slab)
+      add_slab(floor_group.entities, width, depth, slab, z)
+      add_walls(walls_group.entities, width, depth, wall, height, z + slab)
       z += height
     end
 
-    add_roof(group.entities, building, width, depth, wall, slab, z)
+    add_roof(roof_group.entities, building, width, depth, wall, slab, z)
     model.commit_operation
   rescue StandardError
     model.abort_operation if model
     raise
+  end
+
+  def add_named_group(entities, name)
+    group = entities.add_group
+    group.name = name
+    group
   end
 
   def add_slab(entities, width, depth, thickness, z)
