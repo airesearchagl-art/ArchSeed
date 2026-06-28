@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "archseed.v0.1",
+  "units": "mm",
+  "project": {
+    "name": "Two Story Box v0.1",
+    "description": "Two-level box sample for level and height checks."
+  },
+  "building": {
+    "footprint": {
+      "width": 6400,
+      "depth": 4800
+    },
+    "levels": [
+      {
+        "name": "Level 1",
+        "height": 3000
+      },
+      {
+        "name": "Level 2",
+        "height": 3000
+      }
+    ],
+    "wallThickness": 160,
+    "slabThickness": 200,
+    "roof": {
+      "type": "flat",
+      "parapetHeight": 350
+    }
+  }
+}

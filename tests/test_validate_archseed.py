@@ -11,16 +11,33 @@ from tools.validate_archseed import ValidationError, validate_archseed
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_PATH = ROOT / "examples" / "simple_house.v0.1.json"
+SAMPLE_PATHS = (
+    SAMPLE_PATH,
+    ROOT / "examples" / "small_office.v0.1.json",
+    ROOT / "examples" / "two_story_box.v0.1.json",
+    ROOT / "examples" / "compact_house.v0.1.json",
+)
 RUBY_LOADER_PATH = ROOT / "sketchup" / "archseed_loader.rb"
 
 
-def load_sample() -> dict:
-    return json.loads(SAMPLE_PATH.read_text(encoding="utf-8"))
+def load_sample(path: Path = SAMPLE_PATH) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_sample_json_is_valid() -> None:
-    data = load_sample()
+@pytest.mark.parametrize("sample_path", SAMPLE_PATHS, ids=lambda path: path.stem)
+def test_sample_json_is_valid(sample_path: Path) -> None:
+    data = load_sample(sample_path)
     assert validate_archseed(data) == data
+
+
+@pytest.mark.parametrize("sample_path", SAMPLE_PATHS, ids=lambda path: path.stem)
+def test_sample_json_has_minimum_building_structure(sample_path: Path) -> None:
+    assert sample_path.is_file()
+    data = load_sample(sample_path)
+    assert data["project"]["name"].strip()
+    assert data["building"]["levels"]
+    assert data["building"]["footprint"]["width"] > 0
+    assert data["building"]["footprint"]["depth"] > 0
 
 
 @pytest.mark.parametrize(

@@ -58,6 +58,19 @@ Level and element group names are derived from each validated JSON level name.
   300 mm).
 - Floor, walls, and roof remain separate named groups inside the building group.
 
+## Sample JSON Files
+
+- `examples/simple_house.v0.1.json` - baseline two-level house sample
+- `examples/small_office.v0.1.json` - single-level small office massing sample
+- `examples/two_story_box.v0.1.json` - two-story box for level and height checks
+- `examples/compact_house.v0.1.json` - single-level compact residential sample
+
+Import a specific sample from the SketchUp Ruby Console:
+
+```ruby
+ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/examples/small_office.v0.1.json")
+```
+
 ## Repository Layout
 
 ```text

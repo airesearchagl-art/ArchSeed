@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "archseed.v0.1",
+  "units": "mm",
+  "project": {
+    "name": "Compact House v0.1",
+    "description": "Single-level compact residential massing sample."
+  },
+  "building": {
+    "footprint": {
+      "width": 4800,
+      "depth": 3600
+    },
+    "levels": [
+      {
+        "name": "Ground Floor",
+        "height": 2700
+      }
+    ],
+    "wallThickness": 140,
+    "slabThickness": 160,
+    "roof": {
+      "type": "flat",
+      "parapetHeight": 250
+    }
+  }
+}

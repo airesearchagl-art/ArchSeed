@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "archseed.v0.1",
+  "units": "mm",
+  "project": {
+    "name": "Small Office v0.1",
+    "description": "Single-level small office massing sample."
+  },
+  "building": {
+    "footprint": {
+      "width": 9600,
+      "depth": 7200
+    },
+    "levels": [
+      {
+        "name": "Office Level",
+        "height": 3300
+      }
+    ],
+    "wallThickness": 180,
+    "slabThickness": 200,
+    "roof": {
+      "type": "flat",
+      "parapetHeight": 450
+    }
+  }
+}
