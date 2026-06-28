@@ -119,6 +119,9 @@ def test_sketchup_loader_constants_are_reload_safe() -> None:
         "DEFAULT_WALL_THICKNESS_MM": "150.0",
         "DEFAULT_SLAB_THICKNESS_MM": "180.0",
         "DEFAULT_PARAPET_HEIGHT_MM": "300.0",
+        "FLOOR_TAG_NAME": "'ArchSeed Floor'",
+        "WALLS_TAG_NAME": "'ArchSeed Walls'",
+        "ROOF_TAG_NAME": "'ArchSeed Roof'",
     }
     for constant, value in constants.items():
         definition = f"{constant} = {value} unless const_defined?(:{constant}, false)"
@@ -140,3 +143,19 @@ def test_sketchup_loader_geometry_dimension_rules_are_explicit() -> None:
         assert rule in source
 
     assert "height must exceed slab thickness" in source
+
+
+def test_sketchup_loader_assigns_reusable_tags_to_element_groups() -> None:
+    source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
+    expected_tag_assignments = [
+        '"ArchSeed Floor - #{level_name}", floor_tag',
+        '"ArchSeed Walls - #{level_name}", walls_tag',
+        "'ArchSeed Roof', roof_tag",
+    ]
+    for assignment in expected_tag_assignments:
+        assert assignment in source
+
+    assert "tags[name] || tags.add(name)" in source
+    assert "group.layer = tag if tag" in source
+    assert '"ArchSeed Building - #{project_name}", untagged' in source
+    assert '"ArchSeed #{level_name}", untagged' in source

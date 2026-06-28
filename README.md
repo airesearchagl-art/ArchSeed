@@ -43,6 +43,21 @@ ArchSeed Building - Simple House v0.1
 
 Level and element group names are derived from each validated JSON level name.
 
+### SketchUp Tags
+
+ArchSeed creates or reuses the following Tags and assigns them to generated
+element Group instances:
+
+- `ArchSeed Floor`
+- `ArchSeed Walls`
+- `ArchSeed Roof`
+
+Building and level wrapper Groups are explicitly kept `Untagged`. ArchSeed does
+not assign category Tags to raw edges or faces; Tags are assigned only to Group
+instances. This follows SketchUp modeling practice and allows category
+visibility to be controlled from the Tags panel without changing the Outliner
+hierarchy.
+
 ### Geometry Dimension Rules
 
 - JSON dimensions are millimeters and are converted to SketchUp inches.
