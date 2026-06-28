@@ -16,7 +16,9 @@ SAMPLE_PATHS = (
     ROOT / "examples" / "small_office.v0.1.json",
     ROOT / "examples" / "two_story_box.v0.1.json",
     ROOT / "examples" / "compact_house.v0.1.json",
+    ROOT / "examples" / "house_with_openings.v0.1.json",
 )
+OPENINGS_SAMPLE_PATH = ROOT / "examples" / "house_with_openings.v0.1.json"
 RUBY_LOADER_PATH = ROOT / "sketchup" / "archseed_loader.rb"
 
 
@@ -75,6 +77,39 @@ def test_validation_does_not_mutate_input() -> None:
     assert data == before
 
 
+def test_openings_sample_uses_supported_minimum_structure() -> None:
+    data = load_sample(OPENINGS_SAMPLE_PATH)
+    openings = data["building"]["openings"]
+    assert {opening["type"] for opening in openings} == {"window", "door"}
+    assert {opening["wall"] for opening in openings} <= {
+        "north",
+        "south",
+        "east",
+        "west",
+    }
+    assert any(isinstance(opening["level"], str) for opening in openings)
+    assert any(isinstance(opening["level"], int) for opening in openings)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("wall", "ceiling", "wall must be"),
+        ("level", 9, "level index is out of range"),
+        ("offset_mm", 7000, "extends beyond its wall"),
+        ("height_mm", 4000, "extends above the generated wall"),
+    ],
+)
+def test_invalid_opening_values_are_rejected(
+    field: str, value: object, message: str
+) -> None:
+    data = load_sample(OPENINGS_SAMPLE_PATH)
+    data["building"]["openings"][0][field] = value
+
+    with pytest.raises(ValidationError, match=message):
+        validate_archseed(data)
+
+
 def test_sketchup_loader_avoids_forbidden_execution_apis() -> None:
     source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
     forbidden_tokens = [
@@ -119,9 +154,14 @@ def test_sketchup_loader_constants_are_reload_safe() -> None:
         "DEFAULT_WALL_THICKNESS_MM": "150.0",
         "DEFAULT_SLAB_THICKNESS_MM": "180.0",
         "DEFAULT_PARAPET_HEIGHT_MM": "300.0",
+        "DEFAULT_WINDOW_SILL_HEIGHT_MM": "900.0",
+        "OPENING_INDICATOR_OFFSET_MM": "2.0",
         "FLOOR_TAG_NAME": "'ArchSeed Floor'",
         "WALLS_TAG_NAME": "'ArchSeed Walls'",
         "ROOF_TAG_NAME": "'ArchSeed Roof'",
+        "OPENINGS_TAG_NAME": "'ArchSeed Openings'",
+        "WINDOW_MATERIAL_NAME": "'ArchSeed Window Indicator'",
+        "DOOR_MATERIAL_NAME": "'ArchSeed Door Indicator'",
     }
     for constant, value in constants.items():
         definition = f"{constant} = {value} unless const_defined?(:{constant}, false)"
@@ -159,3 +199,25 @@ def test_sketchup_loader_assigns_reusable_tags_to_element_groups() -> None:
     assert "group.layer = tag if tag" in source
     assert '"ArchSeed Building - #{project_name}", untagged' in source
     assert '"ArchSeed #{level_name}", untagged' in source
+
+
+def test_sketchup_loader_builds_simple_opening_indicators() -> None:
+    source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
+    expected_source_fragments = [
+        '"ArchSeed Openings - #{level_name}"',
+        '"ArchSeed #{label} - #{level_name}"',
+        "add_opening_indicator(",
+        "opening_points(",
+        "validate_openings!(building, levels, footprint)",
+        "resolve_level_index(levels, opening.fetch('level')",
+        "find_or_create_tag(model, OPENINGS_TAG_NAME)",
+        "face.material = material",
+        "face.back_material = material",
+    ]
+    for fragment in expected_source_fragments:
+        assert fragment in source
+
+    opening_method = source[
+        source.index("def add_opening_indicator") : source.index("def opening_points")
+    ]
+    assert "pushpull" not in opening_method

@@ -9,6 +9,11 @@ from typing import Any
 MAX_FOOTPRINT_MM = 200_000
 MAX_LEVELS = 20
 MAX_LEVEL_HEIGHT_MM = 10_000
+MAX_OPENINGS = 200
+DEFAULT_SLAB_THICKNESS_MM = 180
+DEFAULT_WINDOW_SILL_HEIGHT_MM = 900
+OPENING_TYPES = {"window", "door"}
+WALL_NAMES = {"north", "south", "east", "west"}
 
 
 class ValidationError(ValueError):
@@ -27,6 +32,17 @@ def _require_number(value: Any, path: str, *, minimum: float, maximum: float) ->
     number = float(value)
     if number <= minimum or number > maximum:
         raise ValidationError(f"{path} must be > {minimum} and <= {maximum}")
+    return number
+
+
+def _require_nonnegative_number(
+    value: Any, path: str, *, maximum: float
+) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise ValidationError(f"{path} must be a number")
+    number = float(value)
+    if number < 0 or number > maximum:
+        raise ValidationError(f"{path} must be >= 0 and <= {maximum}")
     return number
 
 
@@ -64,7 +80,14 @@ def validate_archseed(data: Any) -> dict[str, Any]:
     _reject_unknown_keys(
         building,
         "$.building",
-        {"footprint", "levels", "wallThickness", "slabThickness", "roof"},
+        {
+            "footprint",
+            "levels",
+            "openings",
+            "wallThickness",
+            "slabThickness",
+            "roof",
+        },
     )
 
     footprint = _require_object(building.get("footprint"), "$.building.footprint")
@@ -104,13 +127,114 @@ def validate_archseed(data: Any) -> dict[str, Any]:
             minimum=0,
             maximum=1000,
         )
+    slab_thickness = DEFAULT_SLAB_THICKNESS_MM
     if "slabThickness" in building:
-        _require_number(
+        slab_thickness = _require_number(
             building["slabThickness"],
             "$.building.slabThickness",
             minimum=0,
             maximum=1000,
         )
+
+    openings = building.get("openings", [])
+    if not isinstance(openings, list) or len(openings) > MAX_OPENINGS:
+        raise ValidationError(
+            f"$.building.openings must be an array with at most {MAX_OPENINGS} items"
+        )
+
+    for index, opening_value in enumerate(openings):
+        opening_path = f"$.building.openings[{index}]"
+        opening = _require_object(opening_value, opening_path)
+        _reject_unknown_keys(
+            opening,
+            opening_path,
+            {
+                "type",
+                "level",
+                "wall",
+                "offset_mm",
+                "width_mm",
+                "height_mm",
+                "sill_height_mm",
+            },
+        )
+
+        opening_type = opening.get("type")
+        if opening_type not in OPENING_TYPES:
+            raise ValidationError(f"{opening_path}.type must be window or door")
+
+        level_reference = opening.get("level")
+        if isinstance(level_reference, bool):
+            raise ValidationError(
+                f"{opening_path}.level must be a level name or zero-based index"
+            )
+        if isinstance(level_reference, int):
+            if not 0 <= level_reference < len(levels):
+                raise ValidationError(f"{opening_path}.level index is out of range")
+            level_index = level_reference
+        elif isinstance(level_reference, str) and level_reference.strip():
+            level_index = next(
+                (
+                    level_index
+                    for level_index, level in enumerate(levels)
+                    if level["name"] == level_reference
+                ),
+                -1,
+            )
+            if level_index < 0:
+                raise ValidationError(
+                    f"{opening_path}.level does not match a building level"
+                )
+        else:
+            raise ValidationError(
+                f"{opening_path}.level must be a level name or zero-based index"
+            )
+
+        wall = opening.get("wall")
+        if wall not in WALL_NAMES:
+            raise ValidationError(
+                f"{opening_path}.wall must be north, south, east, or west"
+            )
+
+        offset = _require_nonnegative_number(
+            opening.get("offset_mm"),
+            f"{opening_path}.offset_mm",
+            maximum=MAX_FOOTPRINT_MM,
+        )
+        width = _require_number(
+            opening.get("width_mm"),
+            f"{opening_path}.width_mm",
+            minimum=0,
+            maximum=MAX_FOOTPRINT_MM,
+        )
+        height = _require_number(
+            opening.get("height_mm"),
+            f"{opening_path}.height_mm",
+            minimum=0,
+            maximum=MAX_LEVEL_HEIGHT_MM,
+        )
+        default_sill = (
+            DEFAULT_WINDOW_SILL_HEIGHT_MM if opening_type == "window" else 0
+        )
+        sill = _require_nonnegative_number(
+            opening.get("sill_height_mm", default_sill),
+            f"{opening_path}.sill_height_mm",
+            maximum=MAX_LEVEL_HEIGHT_MM,
+        )
+
+        wall_span = (
+            float(footprint["width"])
+            if wall in {"north", "south"}
+            else float(footprint["depth"])
+        )
+        if offset + width > wall_span:
+            raise ValidationError(f"{opening_path} extends beyond its wall")
+
+        wall_height = float(levels[level_index]["height"]) - slab_thickness
+        if sill + height > wall_height:
+            raise ValidationError(
+                f"{opening_path} extends above the generated wall"
+            )
 
     if "roof" in building:
         roof = _require_object(building["roof"], "$.building.roof")

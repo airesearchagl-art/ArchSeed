@@ -72,6 +72,64 @@
             }
           }
         },
+        "openings": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "required": [
+              "type",
+              "level",
+              "wall",
+              "offset_mm",
+              "width_mm",
+              "height_mm"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "enum": ["window", "door"]
+              },
+              "level": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 19
+                  }
+                ]
+              },
+              "wall": {
+                "enum": ["north", "south", "east", "west"]
+              },
+              "offset_mm": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 200000
+              },
+              "width_mm": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 200000
+              },
+              "height_mm": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 10000
+              },
+              "sill_height_mm": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            }
+          }
+        },
         "wallThickness": {
           "type": "number",
           "exclusiveMinimum": 0,
