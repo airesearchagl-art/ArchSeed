@@ -24,7 +24,7 @@ ArchSeed v0.1.0 generated the complete building geometry inside one group.
 ArchSeed v0.2 keeps an overall building group, organizes floor and wall groups
 under stable level groups, and keeps the roof as a separate group. This makes
 each level and geometry category easier to find and edit in SketchUp without
-changing the v0.1 JSON format or import flow.
+changing the v0.1 schema version or import flow.
 
 ### Outliner Hierarchy
 
@@ -34,7 +34,8 @@ For `examples/simple_house.v0.1.json`, the generated groups are:
 ArchSeed Building - Simple House v0.1
 |-- ArchSeed Level 1
 |   |-- ArchSeed Floor - Level 1
-|   `-- ArchSeed Walls - Level 1
+|   |-- ArchSeed Walls - Level 1
+|   `-- ArchSeed Openings - Level 1 (when defined)
 |-- ArchSeed Level 2
 |   |-- ArchSeed Floor - Level 2
 |   `-- ArchSeed Walls - Level 2
@@ -51,12 +52,30 @@ element Group instances:
 - `ArchSeed Floor`
 - `ArchSeed Walls`
 - `ArchSeed Roof`
+- `ArchSeed Openings`
 
 Building and level wrapper Groups are explicitly kept `Untagged`. ArchSeed does
 not assign category Tags to raw edges or faces; Tags are assigned only to Group
 instances. This follows SketchUp modeling practice and allows category
 visibility to be controlled from the Tags panel without changing the Outliner
 hierarchy.
+
+### Simple Opening Indicators
+
+An optional `building.openings` array can place simple window and door
+indicators on the north, south, east, or west wall of a level. Each opening
+defines:
+
+- `type`: `window` or `door`
+- `level`: an exact level name or a zero-based level index
+- `wall`: `north`, `south`, `east`, or `west`
+- `offset_mm`, `width_mm`, and `height_mm`
+- optional `sill_height_mm` (defaults to 900 mm for windows and 0 mm for doors)
+
+These indicators are colored rectangular faces grouped under
+`ArchSeed Openings - <level name>` and assigned the `ArchSeed Openings` Tag.
+They show intended opening positions only. ArchSeed v0.2 does not cut or
+boolean-subtract openings from wall geometry.
 
 ### Geometry Dimension Rules
 
@@ -79,11 +98,18 @@ hierarchy.
 - `examples/small_office.v0.1.json` - single-level small office massing sample
 - `examples/two_story_box.v0.1.json` - two-story box for level and height checks
 - `examples/compact_house.v0.1.json` - single-level compact residential sample
+- `examples/house_with_openings.v0.1.json` - window and door indicator sample
 
 Import a specific sample from the SketchUp Ruby Console:
 
 ```ruby
 ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/examples/small_office.v0.1.json")
+```
+
+Import the opening indicator sample:
+
+```ruby
+ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/examples/house_with_openings.v0.1.json")
 ```
 
 ## Repository Layout

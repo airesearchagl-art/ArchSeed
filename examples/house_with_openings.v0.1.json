@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "archseed.v0.1",
+  "units": "mm",
+  "project": {
+    "name": "House with Openings v0.1",
+    "description": "Single-level house with simple window and door indicators."
+  },
+  "building": {
+    "footprint": {
+      "width": 7200,
+      "depth": 5400
+    },
+    "levels": [
+      {
+        "name": "Level 1",
+        "height": 3000
+      }
+    ],
+    "openings": [
+      {
+        "type": "window",
+        "level": "Level 1",
+        "wall": "south",
+        "offset_mm": 1200,
+        "width_mm": 1800,
+        "height_mm": 1200,
+        "sill_height_mm": 900
+      },
+      {
+        "type": "window",
+        "level": "Level 1",
+        "wall": "north",
+        "offset_mm": 3600,
+        "width_mm": 1500,
+        "height_mm": 1200,
+        "sill_height_mm": 900
+      },
+      {
+        "type": "door",
+        "level": 0,
+        "wall": "east",
+        "offset_mm": 1800,
+        "width_mm": 900,
+        "height_mm": 2100
+      }
+    ],
+    "wallThickness": 150,
+    "slabThickness": 180,
+    "roof": {
+      "type": "flat",
+      "parapetHeight": 300
+    }
+  }
+}
