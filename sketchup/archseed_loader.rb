@@ -7,6 +7,9 @@ module ArchSeed
   DEFAULT_WALL_THICKNESS_MM = 150.0 unless const_defined?(:DEFAULT_WALL_THICKNESS_MM, false)
   DEFAULT_SLAB_THICKNESS_MM = 180.0 unless const_defined?(:DEFAULT_SLAB_THICKNESS_MM, false)
   DEFAULT_PARAPET_HEIGHT_MM = 300.0 unless const_defined?(:DEFAULT_PARAPET_HEIGHT_MM, false)
+  FLOOR_TAG_NAME = 'ArchSeed Floor' unless const_defined?(:FLOOR_TAG_NAME, false)
+  WALLS_TAG_NAME = 'ArchSeed Walls' unless const_defined?(:WALLS_TAG_NAME, false)
+  ROOF_TAG_NAME = 'ArchSeed Roof' unless const_defined?(:ROOF_TAG_NAME, false)
 
   module_function
 
@@ -54,9 +57,13 @@ module ArchSeed
     depth = mm(building.fetch('footprint').fetch('depth'))
     wall = mm(building.fetch('wallThickness', DEFAULT_WALL_THICKNESS_MM))
     slab = mm(building.fetch('slabThickness', DEFAULT_SLAB_THICKNESS_MM))
+    untagged = model.layers[0]
+    floor_tag = find_or_create_tag(model, FLOOR_TAG_NAME)
+    walls_tag = find_or_create_tag(model, WALLS_TAG_NAME)
+    roof_tag = find_or_create_tag(model, ROOF_TAG_NAME)
 
     project_name = data.fetch('project').fetch('name')
-    building_group = add_named_group(model.active_entities, "ArchSeed Building - #{project_name}")
+    building_group = add_named_group(model.active_entities, "ArchSeed Building - #{project_name}", untagged)
 
     level_bottom_z = 0.0
     building.fetch('levels').each do |level|
@@ -71,16 +78,16 @@ module ArchSeed
         raise ArgumentError, "#{level_name} height must exceed slab thickness"
       end
 
-      level_group = add_named_group(building_group.entities, "ArchSeed #{level_name}")
-      floor_group = add_named_group(level_group.entities, "ArchSeed Floor - #{level_name}")
-      walls_group = add_named_group(level_group.entities, "ArchSeed Walls - #{level_name}")
+      level_group = add_named_group(building_group.entities, "ArchSeed #{level_name}", untagged)
+      floor_group = add_named_group(level_group.entities, "ArchSeed Floor - #{level_name}", floor_tag)
+      walls_group = add_named_group(level_group.entities, "ArchSeed Walls - #{level_name}", walls_tag)
       add_slab(floor_group.entities, width, depth, slab, floor_bottom_z)
       add_walls(walls_group.entities, width, depth, wall, wall_height, wall_bottom_z)
       level_bottom_z = wall_top_z
     end
 
     roof_bottom_z = level_bottom_z
-    roof_group = add_named_group(building_group.entities, 'ArchSeed Roof')
+    roof_group = add_named_group(building_group.entities, 'ArchSeed Roof', roof_tag)
     add_roof(roof_group.entities, building, width, depth, wall, slab, roof_bottom_z)
     model.commit_operation
   rescue StandardError
@@ -88,9 +95,15 @@ module ArchSeed
     raise
   end
 
-  def add_named_group(entities, name)
+  def find_or_create_tag(model, name)
+    tags = model.layers
+    tags[name] || tags.add(name)
+  end
+
+  def add_named_group(entities, name, tag = nil)
     group = entities.add_group
     group.name = name
+    group.layer = tag if tag
     group
   end
 
