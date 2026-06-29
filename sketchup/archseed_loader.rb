@@ -13,8 +13,18 @@ module ArchSeed
   WALLS_TAG_NAME = 'ArchSeed Walls' unless const_defined?(:WALLS_TAG_NAME, false)
   ROOF_TAG_NAME = 'ArchSeed Roof' unless const_defined?(:ROOF_TAG_NAME, false)
   OPENINGS_TAG_NAME = 'ArchSeed Openings' unless const_defined?(:OPENINGS_TAG_NAME, false)
-  WINDOW_MATERIAL_NAME = 'ArchSeed Window Indicator' unless const_defined?(:WINDOW_MATERIAL_NAME, false)
-  DOOR_MATERIAL_NAME = 'ArchSeed Door Indicator' unless const_defined?(:DOOR_MATERIAL_NAME, false)
+  FLOOR_MATERIAL_NAME = 'ArchSeed Floor Material' unless const_defined?(:FLOOR_MATERIAL_NAME, false)
+  WALL_MATERIAL_NAME = 'ArchSeed Wall Material' unless const_defined?(:WALL_MATERIAL_NAME, false)
+  ROOF_MATERIAL_NAME = 'ArchSeed Roof Material' unless const_defined?(:ROOF_MATERIAL_NAME, false)
+  WINDOW_MATERIAL_NAME = 'ArchSeed Window Material' unless const_defined?(:WINDOW_MATERIAL_NAME, false)
+  DOOR_MATERIAL_NAME = 'ArchSeed Door Material' unless const_defined?(:DOOR_MATERIAL_NAME, false)
+  MATERIAL_STYLES = {
+    FLOOR_MATERIAL_NAME => [[175, 180, 170], 1.0],
+    WALL_MATERIAL_NAME => [[225, 218, 200], 1.0],
+    ROOF_MATERIAL_NAME => [[155, 165, 180], 1.0],
+    WINDOW_MATERIAL_NAME => [[70, 160, 220], 0.55],
+    DOOR_MATERIAL_NAME => [[170, 110, 70], 0.8]
+  }.freeze unless const_defined?(:MATERIAL_STYLES, false)
 
   module_function
 
@@ -70,6 +80,9 @@ module ArchSeed
     roof_tag = find_or_create_tag(model, ROOF_TAG_NAME)
     openings = building.fetch('openings', [])
     openings_tag = openings.empty? ? nil : find_or_create_tag(model, OPENINGS_TAG_NAME)
+    floor_material = find_or_create_material(model, FLOOR_MATERIAL_NAME)
+    wall_material = find_or_create_material(model, WALL_MATERIAL_NAME)
+    roof_material = find_or_create_material(model, ROOF_MATERIAL_NAME)
 
     project_name = data.fetch('project').fetch('name')
     building_group = add_named_group(model.active_entities, "ArchSeed Building - #{project_name}", untagged)
@@ -89,8 +102,18 @@ module ArchSeed
       end
 
       level_group = add_named_group(building_group.entities, "ArchSeed #{level_name}", untagged)
-      floor_group = add_named_group(level_group.entities, "ArchSeed Floor - #{level_name}", floor_tag)
-      walls_group = add_named_group(level_group.entities, "ArchSeed Walls - #{level_name}", walls_tag)
+      floor_group = add_named_group(
+        level_group.entities,
+        "ArchSeed Floor - #{level_name}",
+        floor_tag,
+        floor_material
+      )
+      walls_group = add_named_group(
+        level_group.entities,
+        "ArchSeed Walls - #{level_name}",
+        walls_tag,
+        wall_material
+      )
       add_slab(floor_group.entities, width, depth, slab, floor_bottom_z)
       add_walls(walls_group.entities, width, depth, wall, wall_height, wall_bottom_z)
       level_openings = openings.select do |opening|
@@ -119,7 +142,12 @@ module ArchSeed
     end
 
     roof_bottom_z = level_bottom_z
-    roof_group = add_named_group(building_group.entities, 'ArchSeed Roof', roof_tag)
+    roof_group = add_named_group(
+      building_group.entities,
+      'ArchSeed Roof',
+      roof_tag,
+      roof_material
+    )
     add_roof(roof_group.entities, building, width, depth, wall, slab, roof_bottom_z)
     model.commit_operation
   rescue StandardError
@@ -132,10 +160,11 @@ module ArchSeed
     tags[name] || tags.add(name)
   end
 
-  def add_named_group(entities, name, tag = nil)
+  def add_named_group(entities, name, tag = nil, material = nil)
     group = entities.add_group
     group.name = name
     group.layer = tag if tag
+    group.material = material if material
     group
   end
 
@@ -181,15 +210,17 @@ module ArchSeed
     )
 
     label = opening_type == 'window' ? 'Window' : 'Door'
+    material_name = opening_type == 'window' ? WINDOW_MATERIAL_NAME : DOOR_MATERIAL_NAME
+    material = find_or_create_material(model, material_name)
     opening_group = add_named_group(
       entities,
       "ArchSeed #{label} - #{level_name}",
-      tag
+      tag,
+      material
     )
     face = opening_group.entities.add_face(points)
     raise ArgumentError, "Could not create #{opening_type} indicator" unless face
 
-    material = find_or_create_opening_material(model, opening_type)
     face.material = material
     face.back_material = material
   end
@@ -213,12 +244,11 @@ module ArchSeed
     end
   end
 
-  def find_or_create_opening_material(model, opening_type)
-    is_window = opening_type == 'window'
-    name = is_window ? WINDOW_MATERIAL_NAME : DOOR_MATERIAL_NAME
+  def find_or_create_material(model, name)
+    color, alpha = MATERIAL_STYLES.fetch(name)
     material = model.materials[name] || model.materials.add(name)
-    material.color = is_window ? Sketchup::Color.new(70, 160, 220) : Sketchup::Color.new(170, 110, 70)
-    material.alpha = is_window ? 0.55 : 0.8
+    material.color = Sketchup::Color.new(*color)
+    material.alpha = alpha
     material
   end
 

@@ -139,9 +139,11 @@ def test_sketchup_loader_builds_named_editable_geometry_groups() -> None:
         assert name in source
 
     assert "level_group = add_named_group(building_group.entities" in source
-    assert "floor_group = add_named_group(level_group.entities" in source
-    assert "walls_group = add_named_group(level_group.entities" in source
-    assert "roof_group = add_named_group(building_group.entities" in source
+    assert "floor_group = add_named_group(" in source
+    assert "walls_group = add_named_group(" in source
+    assert "roof_group = add_named_group(" in source
+    assert "level_group.entities," in source
+    assert "building_group.entities," in source
     assert "add_slab(floor_group.entities" in source
     assert "add_walls(walls_group.entities" in source
     assert "add_roof(roof_group.entities" in source
@@ -160,8 +162,11 @@ def test_sketchup_loader_constants_are_reload_safe() -> None:
         "WALLS_TAG_NAME": "'ArchSeed Walls'",
         "ROOF_TAG_NAME": "'ArchSeed Roof'",
         "OPENINGS_TAG_NAME": "'ArchSeed Openings'",
-        "WINDOW_MATERIAL_NAME": "'ArchSeed Window Indicator'",
-        "DOOR_MATERIAL_NAME": "'ArchSeed Door Indicator'",
+        "FLOOR_MATERIAL_NAME": "'ArchSeed Floor Material'",
+        "WALL_MATERIAL_NAME": "'ArchSeed Wall Material'",
+        "ROOF_MATERIAL_NAME": "'ArchSeed Roof Material'",
+        "WINDOW_MATERIAL_NAME": "'ArchSeed Window Material'",
+        "DOOR_MATERIAL_NAME": "'ArchSeed Door Material'",
     }
     for constant, value in constants.items():
         definition = f"{constant} = {value} unless const_defined?(:{constant}, false)"
@@ -187,18 +192,13 @@ def test_sketchup_loader_geometry_dimension_rules_are_explicit() -> None:
 
 def test_sketchup_loader_assigns_reusable_tags_to_element_groups() -> None:
     source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
-    expected_tag_assignments = [
-        '"ArchSeed Floor - #{level_name}", floor_tag',
-        '"ArchSeed Walls - #{level_name}", walls_tag',
-        "'ArchSeed Roof', roof_tag",
-    ]
-    for assignment in expected_tag_assignments:
-        assert assignment in source
-
     assert "tags[name] || tags.add(name)" in source
     assert "group.layer = tag if tag" in source
     assert '"ArchSeed Building - #{project_name}", untagged' in source
     assert '"ArchSeed #{level_name}", untagged' in source
+    assert '"ArchSeed Floor - #{level_name}",\n        floor_tag,' in source
+    assert '"ArchSeed Walls - #{level_name}",\n        walls_tag,' in source
+    assert "'ArchSeed Roof',\n      roof_tag," in source
 
 
 def test_sketchup_loader_builds_simple_opening_indicators() -> None:
@@ -221,3 +221,32 @@ def test_sketchup_loader_builds_simple_opening_indicators() -> None:
         source.index("def add_opening_indicator") : source.index("def opening_points")
     ]
     assert "pushpull" not in opening_method
+
+
+def test_sketchup_loader_defines_and_assigns_stable_materials() -> None:
+    source = RUBY_LOADER_PATH.read_text(encoding="utf-8")
+    material_names = [
+        "ArchSeed Floor Material",
+        "ArchSeed Wall Material",
+        "ArchSeed Roof Material",
+        "ArchSeed Window Material",
+        "ArchSeed Door Material",
+    ]
+    for name in material_names:
+        assert name in source
+
+    expected_assignments = [
+        "floor_tag,\n        floor_material",
+        "walls_tag,\n        wall_material",
+        "roof_tag,\n      roof_material",
+        '"ArchSeed #{label} - #{level_name}",\n      tag,\n      material',
+    ]
+    for assignment in expected_assignments:
+        assert assignment in source
+
+    assert "MATERIAL_STYLES = {" in source
+    assert "}.freeze unless const_defined?(:MATERIAL_STYLES, false)" in source
+    assert "model.materials[name] || model.materials.add(name)" in source
+    assert "group.material = material if material" in source
+    assert "material.color = Sketchup::Color.new(*color)" in source
+    assert "material.alpha = alpha" in source
