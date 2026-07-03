@@ -27,19 +27,38 @@ v0.1-compatible presets:
 Unknown input falls back to the simple house preset and writes a warning to
 stderr.
 
-Generate a draft:
+Generate a draft to stdout:
+
+```powershell
+python tools/generate_archseed_json.py "simple house"
+```
+
+Generate and save a draft:
 
 ```powershell
 python tools/generate_archseed_json.py "small office with openings" --output examples/generated_small_office.v0.1.json
 ```
 
-Validate the generated JSON, then import it in SketchUp:
+Generate, validate, and save a draft in one command:
+
+```powershell
+python tools/generate_archseed_json.py "small office with openings" --output examples/generated_small_office.v0.1.json --validate
+```
+
+`--validate` uses the existing ArchSeed validator. Validation failures return a
+non-zero exit code. Without `--output`, JSON remains on stdout and the
+validation result is written to stderr.
+
+The generated file can also be validated separately:
 
 ```powershell
 python tools/validate_archseed.py examples/generated_small_office.v0.1.json
 ```
 
+Load the importer and import the generated JSON from the SketchUp Ruby Console:
+
 ```ruby
+load "C:/Users/shuns/.codex/project/ArchSeed/sketchup/archseed_loader.rb"
 ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/examples/generated_small_office.v0.1.json")
 ```
 

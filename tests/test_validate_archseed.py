@@ -119,6 +119,55 @@ def test_json_draft_generator_builds_valid_office_with_openings() -> None:
     }
 
 
+def test_json_draft_generator_prints_json_without_output(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert generate_main(["simple house"]) == 0
+
+    captured = capsys.readouterr()
+    draft = json.loads(captured.out)
+    assert captured.err == ""
+    assert validate_archseed(draft) == draft
+
+
+def test_json_draft_generator_validates_generated_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert generate_main(["simple house", "--validate"]) == 0
+
+    captured = capsys.readouterr()
+    assert validate_archseed(json.loads(captured.out))
+    assert "VALID: generated JSON" in captured.err
+
+
+def test_json_draft_generator_validates_unknown_input_fallback(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert generate_main(["unrecognized pavilion", "--validate"]) == 0
+
+    captured = capsys.readouterr()
+    draft = json.loads(captured.out)
+    assert validate_archseed(draft) == draft
+    assert draft["project"]["name"] == "Generated Simple House"
+    assert "WARNING: no known preset matched" in captured.err
+    assert "VALID: generated JSON" in captured.err
+
+
+def test_json_draft_generator_validates_openings_modifier(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert generate_main(["small office with openings", "--validate"]) == 0
+
+    captured = capsys.readouterr()
+    draft = json.loads(captured.out)
+    assert validate_archseed(draft) == draft
+    assert {opening["type"] for opening in draft["building"]["openings"]} == {
+        "window",
+        "door",
+    }
+    assert "VALID: generated JSON" in captured.err
+
+
 def test_json_draft_generator_warns_and_falls_back(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
