@@ -8,6 +8,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+try:
+    from tools.validate_archseed import ValidationError, validate_archseed
+except ModuleNotFoundError:
+    from validate_archseed import ValidationError, validate_archseed
+
 
 PRESETS: dict[str, dict[str, Any]] = {
     "simple_house": {
@@ -122,6 +127,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Output JSON path. Prints to stdout when omitted.",
     )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate the generated draft before writing it.",
+    )
     return parser
 
 
@@ -135,13 +145,24 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    if args.validate:
+        try:
+            validate_archseed(draft)
+        except ValidationError as exc:
+            print(f"INVALID: {exc}", file=sys.stderr)
+            return 1
+
     output = json.dumps(draft, indent=2, ensure_ascii=False) + "\n"
     if args.output is None:
         print(output, end="")
+        if args.validate:
+            print("VALID: generated JSON", file=sys.stderr)
     else:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output, encoding="utf-8")
         print(f"WROTE: {args.output}")
+        if args.validate:
+            print(f"VALID: {args.output}")
     return 0
 
 
