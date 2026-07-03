@@ -60,6 +60,22 @@ instances. This follows SketchUp modeling practice and allows category
 visibility to be controlled from the Tags panel without changing the Outliner
 hierarchy.
 
+### SketchUp Materials
+
+ArchSeed creates or reuses stable materials and applies them to generated
+element Group instances:
+
+- `ArchSeed Floor Material` - muted gray-green
+- `ArchSeed Wall Material` - warm off-white
+- `ArchSeed Roof Material` - blue-gray
+- `ArchSeed Window Material` - semi-transparent blue
+- `ArchSeed Door Material` - warm brown
+
+The `ArchSeed Openings` wrapper keeps its category Tag without a single
+material so its window and door child Groups remain visually distinct.
+Materials are assigned independently from Tags and do not change the Outliner
+hierarchy.
+
 ### Simple Opening Indicators
 
 An optional `building.openings` array can place simple window and door
