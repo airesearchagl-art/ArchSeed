@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.generate_archseed_json import generate_draft, main as generate_main
 from tools.validate_archseed import ValidationError, validate_archseed
 
 
@@ -20,6 +21,7 @@ SAMPLE_PATHS = (
 )
 OPENINGS_SAMPLE_PATH = ROOT / "examples" / "house_with_openings.v0.1.json"
 RUBY_LOADER_PATH = ROOT / "sketchup" / "archseed_loader.rb"
+JSON_GENERATOR_PATH = ROOT / "tools" / "generate_archseed_json.py"
 
 
 def load_sample(path: Path = SAMPLE_PATH) -> dict:
@@ -75,6 +77,75 @@ def test_validation_does_not_mutate_input() -> None:
     before = copy.deepcopy(data)
     validate_archseed(data)
     assert data == before
+
+
+def test_json_draft_generator_cli_exists() -> None:
+    assert JSON_GENERATOR_PATH.is_file()
+
+
+def test_json_draft_generator_builds_valid_simple_house() -> None:
+    draft, used_fallback = generate_draft("simple house")
+    assert not used_fallback
+    assert validate_archseed(draft) == draft
+    assert draft["project"]["name"] == "Generated Simple House"
+    assert len(draft["building"]["levels"]) == 2
+
+
+@pytest.mark.parametrize(
+    ("description", "project_name", "level_count"),
+    [
+        ("compact house", "Generated Compact House", 1),
+        ("two-story building", "Generated Two Story Building", 2),
+    ],
+)
+def test_json_draft_generator_supports_additional_presets(
+    description: str, project_name: str, level_count: int
+) -> None:
+    draft, used_fallback = generate_draft(description)
+    assert not used_fallback
+    assert validate_archseed(draft) == draft
+    assert draft["project"]["name"] == project_name
+    assert len(draft["building"]["levels"]) == level_count
+
+
+def test_json_draft_generator_builds_valid_office_with_openings() -> None:
+    draft, used_fallback = generate_draft("small office with openings")
+    assert not used_fallback
+    assert validate_archseed(draft) == draft
+    assert draft["project"]["name"] == "Generated Small Office with Openings"
+    assert {opening["type"] for opening in draft["building"]["openings"]} == {
+        "window",
+        "door",
+    }
+
+
+def test_json_draft_generator_warns_and_falls_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output_path = tmp_path / "fallback.v0.1.json"
+    assert generate_main(["unrecognized pavilion", "--output", str(output_path)]) == 0
+
+    captured = capsys.readouterr()
+    assert "WARNING: no known preset matched" in captured.err
+    draft = json.loads(output_path.read_text(encoding="utf-8"))
+    assert validate_archseed(draft) == draft
+    assert draft["project"]["name"] == "Generated Simple House"
+
+
+def test_json_draft_generator_avoids_dynamic_or_external_execution() -> None:
+    source = JSON_GENERATOR_PATH.read_text(encoding="utf-8").lower()
+    forbidden_tokens = [
+        "openai",
+        "anthropic",
+        "subprocess",
+        "eval(",
+        "exec(",
+        "system(",
+        "spawn(",
+        ".env",
+    ]
+    for token in forbidden_tokens:
+        assert token not in source
 
 
 def test_openings_sample_uses_supported_minimum_structure() -> None:
