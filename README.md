@@ -11,12 +11,47 @@ architectural JSON
 -> simple massing/building model
 ```
 
-## v0.3 JSON Draft CLI
+## v0.3 Quickstart
 
-ArchSeed v0.3 starts with a deterministic draft generator for short,
-natural-language-like descriptions. It does not use an LLM API and does not
-perform general natural-language understanding. It maps fixed keywords to
-v0.1-compatible presets:
+ArchSeed v0.3 provides a fully local, deterministic workflow from preset-based
+text input to SketchUp import. It does not use an LLM API or perform general
+natural-language understanding.
+
+Use `generated/` as the workspace for generated JSON drafts. Files matching
+`generated/*.json` are ignored by Git and must not be committed. Move a
+reviewed draft into `examples/` only when intentionally promoting it to a
+maintained example.
+
+1. Generate a JSON draft:
+
+```powershell
+python tools/generate_archseed_json.py "small office with openings" --output generated/small_office_with_openings.v0.1.json
+```
+
+2. Validate the generated JSON:
+
+```powershell
+python tools/validate_archseed.py generated/small_office_with_openings.v0.1.json
+```
+
+3. Print the SketchUp import command:
+
+```powershell
+python tools/print_sketchup_import_command.py generated/small_office_with_openings.v0.1.json
+```
+
+4. Load the importer in the SketchUp Ruby Console, then paste the command
+   printed by step 3:
+
+```ruby
+load "C:/Users/shuns/.codex/project/ArchSeed/sketchup/archseed_loader.rb"
+ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/generated/small_office_with_openings.v0.1.json")
+```
+
+The import helper resolves the JSON path to an absolute path and prints it with
+`/` separators for the Ruby Console.
+
+The generator maps these fixed keywords to v0.1-compatible presets:
 
 - `simple house`
 - `compact house`
@@ -25,57 +60,14 @@ v0.1-compatible presets:
 - `openings` as a window and door modifier
 
 Unknown input falls back to the simple house preset and writes a warning to
-stderr.
-
-Generate a draft to stdout:
-
-```powershell
-python tools/generate_archseed_json.py "simple house"
-```
-
-Generate and save a draft:
-
-```powershell
-python tools/generate_archseed_json.py "simple house" --output generated/simple_house.v0.1.json
-```
-
-Generate, validate, and save a draft in one command:
+stderr. Add `--validate` to generate and validate in one command:
 
 ```powershell
 python tools/generate_archseed_json.py "small office with openings" --output generated/small_office_with_openings.v0.1.json --validate
 ```
 
-`--validate` uses the existing ArchSeed validator. Validation failures return a
-non-zero exit code. Without `--output`, JSON remains on stdout and the
-validation result is written to stderr.
-
-The generated file can also be validated separately:
-
-```powershell
-python tools/validate_archseed.py generated/small_office_with_openings.v0.1.json
-```
-
-Print the absolute import command with `/` path separators:
-
-```powershell
-python tools/print_sketchup_import_command.py generated/small_office_with_openings.v0.1.json
-```
-
-Copy the printed command into the SketchUp Ruby Console after loading the
-importer:
-
-```ruby
-load "C:/Users/shuns/.codex/project/ArchSeed/sketchup/archseed_loader.rb"
-ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/generated/small_office_with_openings.v0.1.json")
-```
-
-This generate, validate, and import-command workflow is fully local and does
-not use an LLM API.
-
-The `generated/` directory is the recommended workspace for generated JSON
-drafts. Its JSON files are ignored by Git and should not be committed. Move a
-reviewed draft into `examples/` only when intentionally promoting it to a
-maintained example.
+Validation failures return a non-zero exit code. Without `--output`, generated
+JSON is written to stdout and validation messages are written to stderr.
 
 ## v0.1 Scope
 
