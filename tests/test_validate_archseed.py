@@ -22,6 +22,8 @@ SAMPLE_PATHS = (
 OPENINGS_SAMPLE_PATH = ROOT / "examples" / "house_with_openings.v0.1.json"
 RUBY_LOADER_PATH = ROOT / "sketchup" / "archseed_loader.rb"
 JSON_GENERATOR_PATH = ROOT / "tools" / "generate_archseed_json.py"
+GITIGNORE_PATH = ROOT / ".gitignore"
+GENERATED_KEEP_PATH = ROOT / "generated" / ".gitkeep"
 
 
 def load_sample(path: Path = SAMPLE_PATH) -> dict:
@@ -81,6 +83,12 @@ def test_validation_does_not_mutate_input() -> None:
 
 def test_json_draft_generator_cli_exists() -> None:
     assert JSON_GENERATOR_PATH.is_file()
+
+
+def test_generated_workspace_is_tracked_without_generated_json() -> None:
+    assert GENERATED_KEEP_PATH.is_file()
+    gitignore_lines = GITIGNORE_PATH.read_text(encoding="utf-8").splitlines()
+    assert "generated/*.json" in gitignore_lines
 
 
 def test_json_draft_generator_builds_valid_simple_house() -> None:
@@ -166,6 +174,38 @@ def test_json_draft_generator_validates_openings_modifier(
         "door",
     }
     assert "VALID: generated JSON" in captured.err
+
+
+def test_json_draft_generator_writes_to_generated_directory(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "generated" / "simple_house.v0.1.json"
+    assert generate_main(["simple house", "--output", str(output_path)]) == 0
+
+    draft = json.loads(output_path.read_text(encoding="utf-8"))
+    assert validate_archseed(draft) == draft
+
+
+def test_json_draft_generator_validates_generated_directory_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output_path = tmp_path / "generated" / "office_with_openings.v0.1.json"
+    assert (
+        generate_main(
+            [
+                "small office with openings",
+                "--output",
+                str(output_path),
+                "--validate",
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    draft = json.loads(output_path.read_text(encoding="utf-8"))
+    assert validate_archseed(draft) == draft
+    assert f"VALID: {output_path}" in captured.out
 
 
 def test_json_draft_generator_warns_and_falls_back(
