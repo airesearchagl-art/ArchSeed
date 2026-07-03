@@ -11,6 +11,41 @@ architectural JSON
 -> simple massing/building model
 ```
 
+## v0.3 JSON Draft CLI
+
+ArchSeed v0.3 starts with a deterministic draft generator for short,
+natural-language-like descriptions. It does not use an LLM API and does not
+perform general natural-language understanding. It maps fixed keywords to
+v0.1-compatible presets:
+
+- `simple house`
+- `compact house`
+- `small office`
+- `two story`
+- `openings` as a window and door modifier
+
+Unknown input falls back to the simple house preset and writes a warning to
+stderr.
+
+Generate a draft:
+
+```powershell
+python tools/generate_archseed_json.py "small office with openings" --output examples/generated_small_office.v0.1.json
+```
+
+Validate the generated JSON, then import it in SketchUp:
+
+```powershell
+python tools/validate_archseed.py examples/generated_small_office.v0.1.json
+```
+
+```ruby
+ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/examples/generated_small_office.v0.1.json")
+```
+
+Generated JSON files are working drafts. They do not need to be committed
+unless they are intentionally promoted to maintained examples.
+
 ## v0.1 Scope
 
 - Define a minimal `archseed.v0.1` JSON format.
