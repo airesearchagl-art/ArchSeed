@@ -26,3 +26,4 @@ Thumbs.db
 # Generated exports
 exports/
 dist/
+generated/*.json

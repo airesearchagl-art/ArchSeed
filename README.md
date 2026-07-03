@@ -36,13 +36,13 @@ python tools/generate_archseed_json.py "simple house"
 Generate and save a draft:
 
 ```powershell
-python tools/generate_archseed_json.py "small office with openings" --output examples/generated_small_office.v0.1.json
+python tools/generate_archseed_json.py "simple house" --output generated/simple_house.v0.1.json
 ```
 
 Generate, validate, and save a draft in one command:
 
 ```powershell
-python tools/generate_archseed_json.py "small office with openings" --output examples/generated_small_office.v0.1.json --validate
+python tools/generate_archseed_json.py "small office with openings" --output generated/small_office_with_openings.v0.1.json --validate
 ```
 
 `--validate` uses the existing ArchSeed validator. Validation failures return a
@@ -52,18 +52,20 @@ validation result is written to stderr.
 The generated file can also be validated separately:
 
 ```powershell
-python tools/validate_archseed.py examples/generated_small_office.v0.1.json
+python tools/validate_archseed.py generated/small_office_with_openings.v0.1.json
 ```
 
 Load the importer and import the generated JSON from the SketchUp Ruby Console:
 
 ```ruby
 load "C:/Users/shuns/.codex/project/ArchSeed/sketchup/archseed_loader.rb"
-ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/examples/generated_small_office.v0.1.json")
+ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/generated/small_office_with_openings.v0.1.json")
 ```
 
-Generated JSON files are working drafts. They do not need to be committed
-unless they are intentionally promoted to maintained examples.
+The `generated/` directory is the recommended workspace for generated JSON
+drafts. Its JSON files are ignored by Git and should not be committed. Move a
+reviewed draft into `examples/` only when intentionally promoting it to a
+maintained example.
 
 ## v0.1 Scope
 
