@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from tools.generate_archseed_json import generate_draft, main as generate_main
+from tools.print_sketchup_import_command import main as print_import_main
 from tools.validate_archseed import ValidationError, validate_archseed
 
 
@@ -22,6 +23,7 @@ SAMPLE_PATHS = (
 OPENINGS_SAMPLE_PATH = ROOT / "examples" / "house_with_openings.v0.1.json"
 RUBY_LOADER_PATH = ROOT / "sketchup" / "archseed_loader.rb"
 JSON_GENERATOR_PATH = ROOT / "tools" / "generate_archseed_json.py"
+IMPORT_HELPER_PATH = ROOT / "tools" / "print_sketchup_import_command.py"
 GITIGNORE_PATH = ROOT / ".gitignore"
 GENERATED_KEEP_PATH = ROOT / "generated" / ".gitkeep"
 
@@ -83,6 +85,42 @@ def test_validation_does_not_mutate_input() -> None:
 
 def test_json_draft_generator_cli_exists() -> None:
     assert JSON_GENERATOR_PATH.is_file()
+
+
+def test_sketchup_import_command_helper_exists() -> None:
+    assert IMPORT_HELPER_PATH.is_file()
+
+
+def test_sketchup_import_command_helper_normalizes_relative_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    relative_path = Path("generated") / "small_office.v0.1.json"
+
+    assert print_import_main([str(relative_path)]) == 0
+
+    command = capsys.readouterr().out.strip()
+    expected_path = (tmp_path / relative_path).resolve().as_posix()
+    assert command == f'ArchSeed.import_json("{expected_path}")'
+    assert "\\" not in command
+
+
+def test_sketchup_import_command_helper_avoids_dangerous_apis() -> None:
+    source = IMPORT_HELPER_PATH.read_text(encoding="utf-8").lower()
+    forbidden_tokens = [
+        "openai",
+        "anthropic",
+        "subprocess",
+        "eval(",
+        "exec(",
+        "system(",
+        "spawn(",
+        ".env",
+    ]
+    for token in forbidden_tokens:
+        assert token not in source
 
 
 def test_generated_workspace_is_tracked_without_generated_json() -> None:

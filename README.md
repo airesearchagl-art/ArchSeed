@@ -55,12 +55,22 @@ The generated file can also be validated separately:
 python tools/validate_archseed.py generated/small_office_with_openings.v0.1.json
 ```
 
-Load the importer and import the generated JSON from the SketchUp Ruby Console:
+Print the absolute import command with `/` path separators:
+
+```powershell
+python tools/print_sketchup_import_command.py generated/small_office_with_openings.v0.1.json
+```
+
+Copy the printed command into the SketchUp Ruby Console after loading the
+importer:
 
 ```ruby
 load "C:/Users/shuns/.codex/project/ArchSeed/sketchup/archseed_loader.rb"
 ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/generated/small_office_with_openings.v0.1.json")
 ```
+
+This generate, validate, and import-command workflow is fully local and does
+not use an LLM API.
 
 The `generated/` directory is the recommended workspace for generated JSON
 drafts. Its JSON files are ignored by Git and should not be committed. Move a
