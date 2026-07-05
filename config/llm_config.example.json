@@ -1,0 +1,14 @@
+{
+  "config_version": "archseed.llm_config.v0.1",
+  "provider": "none",
+  "model": "disabled",
+  "allow_external_api": false,
+  "max_output_tokens": 2048,
+  "temperature": 0,
+  "output_contract": {
+    "format": "archseed.v0.1",
+    "content": "ArchSeed JSON only",
+    "allow_markdown": false,
+    "allow_executable_code": false
+  }
+}

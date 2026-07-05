@@ -100,6 +100,25 @@ Console. Paste the complete `ArchSeed.import_json("...")` line printed by
 `tools/print_sketchup_import_command.py` or stored in the session JSON under
 `sketchup_import_command`.
 
+### Safe LLM Configuration Design
+
+ArchSeed v0.4 includes a disabled-by-default configuration example for a future
+LLM integration:
+
+```powershell
+python tools/validate_llm_config.py config/llm_config.example.json
+```
+
+`config/llm_config.example.json` is a design sample only. It keeps
+`provider` set to `none`, requires `allow_external_api` to be `false`, and
+limits output to ArchSeed v0.1 JSON without Markdown or executable code. Do not
+add API keys, tokens, passwords, secrets, or other credentials to this file.
+
+The draft session workflow remains fully local and deterministic. A future
+integration may use the same output contract before writing generated JSON and
+session records, but v0.4 does not connect to an LLM API, provider SDK, or any
+external service.
+
 ## v0.1 Scope
 
 - Define a minimal `archseed.v0.1` JSON format.
