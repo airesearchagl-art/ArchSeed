@@ -123,6 +123,16 @@ prompt or generate content. The validator permits only `localhost` or
 `false`, and limits output to ArchSeed v0.1 JSON without Markdown or executable
 code.
 
+Preview the prompt intended for a future local LM Studio request:
+
+```powershell
+python tools/preview_llm_prompt.py "small office with openings"
+```
+
+The preview validates `config/llm_config.example.json` and prints the planned
+prompt to stdout. It does not contact LM Studio or perform LLM generation.
+Actual generation will be implemented in a later PR.
+
 The draft session workflow remains fully local and deterministic. A future
 integration may use the same output contract before writing generated JSON and
 session records, but this check does not perform LLM generation. ArchSeed does
