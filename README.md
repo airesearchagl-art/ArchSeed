@@ -69,6 +69,37 @@ python tools/generate_archseed_json.py "small office with openings" --output gen
 Validation failures return a non-zero exit code. Without `--output`, generated
 JSON is written to stdout and validation messages are written to stderr.
 
+## v0.4 Draft Sessions
+
+ArchSeed v0.4 preparation adds a local draft session format on top of the v0.3
+generate, validate, and import-command workflow. It still uses fixed preset
+keywords and does not use an LLM API or external API.
+
+Create a generated ArchSeed JSON file and a session record together:
+
+```powershell
+python tools/create_draft_session.py "small office with openings" --output-session draft_sessions/small_office_with_openings.session.json --output-json generated/small_office_with_openings.v0.1.json
+```
+
+The session JSON records:
+
+- `user_prompt`
+- `generator_mode`
+- `generated_archseed_json_path`
+- `validation_status`
+- `validation_message`
+- `sketchup_import_command`
+- `created_at`
+- `notes`
+
+Files matching `generated/*.json` and `draft_sessions/*.json` are local working
+artifacts and are ignored by Git. Their `.gitkeep` files remain tracked.
+
+When importing into SketchUp, do not paste a `file:///...` URL into the Ruby
+Console. Paste the complete `ArchSeed.import_json("...")` line printed by
+`tools/print_sketchup_import_command.py` or stored in the session JSON under
+`sketchup_import_command`.
+
 ## v0.1 Scope
 
 - Define a minimal `archseed.v0.1` JSON format.

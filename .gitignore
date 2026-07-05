@@ -27,3 +27,5 @@ Thumbs.db
 exports/
 dist/
 generated/*.json
+draft_sessions/*.json
+!draft_sessions/.gitkeep

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.create_draft_session import main as create_session_main
 from tools.generate_archseed_json import generate_draft, main as generate_main
 from tools.print_sketchup_import_command import main as print_import_main
 from tools.validate_archseed import ValidationError, validate_archseed
@@ -24,8 +25,10 @@ OPENINGS_SAMPLE_PATH = ROOT / "examples" / "house_with_openings.v0.1.json"
 RUBY_LOADER_PATH = ROOT / "sketchup" / "archseed_loader.rb"
 JSON_GENERATOR_PATH = ROOT / "tools" / "generate_archseed_json.py"
 IMPORT_HELPER_PATH = ROOT / "tools" / "print_sketchup_import_command.py"
+DRAFT_SESSION_CLI_PATH = ROOT / "tools" / "create_draft_session.py"
 GITIGNORE_PATH = ROOT / ".gitignore"
 GENERATED_KEEP_PATH = ROOT / "generated" / ".gitkeep"
+DRAFT_SESSION_KEEP_PATH = ROOT / "draft_sessions" / ".gitkeep"
 
 
 def load_sample(path: Path = SAMPLE_PATH) -> dict:
@@ -89,6 +92,73 @@ def test_json_draft_generator_cli_exists() -> None:
 
 def test_sketchup_import_command_helper_exists() -> None:
     assert IMPORT_HELPER_PATH.is_file()
+
+
+def test_draft_session_workspace_and_cli_exist() -> None:
+    assert DRAFT_SESSION_KEEP_PATH.is_file()
+    assert DRAFT_SESSION_CLI_PATH.is_file()
+
+
+def test_draft_session_json_is_ignored_but_gitkeep_is_tracked() -> None:
+    gitignore_lines = GITIGNORE_PATH.read_text(encoding="utf-8").splitlines()
+    assert "draft_sessions/*.json" in gitignore_lines
+    assert "!draft_sessions/.gitkeep" in gitignore_lines
+
+
+def test_draft_session_cli_generates_valid_json_and_session(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output_json = tmp_path / "generated" / "small_office.v0.1.json"
+    output_session = tmp_path / "draft_sessions" / "small_office.session.json"
+
+    assert (
+        create_session_main(
+            [
+                "small office with openings",
+                "--output-session",
+                str(output_session),
+                "--output-json",
+                str(output_json),
+            ]
+        )
+        == 0
+    )
+
+    generated = json.loads(output_json.read_text(encoding="utf-8"))
+    session = json.loads(output_session.read_text(encoding="utf-8"))
+    assert validate_archseed(generated) == generated
+    assert session["user_prompt"] == "small office with openings"
+    assert session["generated_archseed_json_path"] == output_json.resolve().as_posix()
+    assert session["validation_status"] == "VALID"
+    assert session["validation_message"].startswith("VALID:")
+    assert session["sketchup_import_command"] == (
+        f'ArchSeed.import_json("{output_json.resolve().as_posix()}")'
+    )
+    assert session["generator_mode"] == "fixed_preset"
+    assert session["created_at"].endswith("Z")
+    assert "VALID:" in capsys.readouterr().out
+
+
+def test_draft_session_cli_avoids_external_and_dangerous_apis() -> None:
+    source = DRAFT_SESSION_CLI_PATH.read_text(encoding="utf-8").lower()
+    forbidden_tokens = [
+        "openai",
+        "anthropic",
+        "requests",
+        "urllib",
+        "httpx",
+        "socket",
+        "subprocess",
+        "eval(",
+        "exec(",
+        "system(",
+        "spawn(",
+        ".env",
+        "`",
+    ]
+    for token in forbidden_tokens:
+        assert token not in source
 
 
 def test_sketchup_import_command_helper_normalizes_relative_path(
