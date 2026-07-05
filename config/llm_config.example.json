@@ -1,8 +1,11 @@
 {
   "config_version": "archseed.llm_config.v0.1",
-  "provider": "none",
-  "model": "disabled",
+  "provider": "lmstudio",
+  "mode": "local",
+  "base_url": "http://localhost:1234/v1",
+  "model": "",
   "allow_external_api": false,
+  "require_api_key": false,
   "max_output_tokens": 2048,
   "temperature": 0,
   "output_contract": {
@@ -10,5 +13,6 @@
     "content": "ArchSeed JSON only",
     "allow_markdown": false,
     "allow_executable_code": false
-  }
+  },
+  "notes": "Prefer the LM Studio local server. Do not use metered cloud APIs or store API keys."
 }

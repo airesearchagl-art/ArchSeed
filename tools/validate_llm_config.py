@@ -8,14 +8,22 @@ from typing import Any
 
 
 MAX_OUTPUT_TOKENS = 4096
+LOCAL_BASE_URL_PATTERN = re.compile(
+    r"^http://(localhost|127\.0\.0\.1)(?::([0-9]{1,5}))?(/v1)/?$",
+    re.IGNORECASE,
+)
 ALLOWED_ROOT_KEYS = {
     "config_version",
     "provider",
+    "mode",
+    "base_url",
     "model",
     "allow_external_api",
+    "require_api_key",
     "max_output_tokens",
     "temperature",
     "output_contract",
+    "notes",
 }
 ALLOWED_CONTRACT_KEYS = {
     "format",
@@ -42,6 +50,7 @@ SENSITIVE_FIELD_SUFFIXES = (
     "_password",
     "_secret",
 )
+SAFE_CREDENTIAL_CONTROL_FIELDS = {"require_api_key"}
 SENSITIVE_VALUE_PATTERNS = (
     re.compile(r"\b(?:sk|rk|pk)-[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\bBearer\s+\S+", re.IGNORECASE),
@@ -79,8 +88,11 @@ def _check_for_credentials(value: Any, path: str = "$") -> None:
                 key.strip().lower(),
             ).strip("_")
             if (
-                normalized_key in SENSITIVE_FIELD_NAMES
-                or normalized_key.endswith(SENSITIVE_FIELD_SUFFIXES)
+                normalized_key not in SAFE_CREDENTIAL_CONTROL_FIELDS
+                and (
+                    normalized_key in SENSITIVE_FIELD_NAMES
+                    or normalized_key.endswith(SENSITIVE_FIELD_SUFFIXES)
+                )
             ):
                 raise ConfigValidationError(
                     f"{path}.{key} is a credential field and is not allowed"
@@ -101,6 +113,24 @@ def _check_for_credentials(value: Any, path: str = "$") -> None:
                 )
 
 
+def parse_local_base_url(value: Any) -> tuple[str, int, str]:
+    if not isinstance(value, str):
+        raise ConfigValidationError("$.base_url must be a string")
+
+    match = LOCAL_BASE_URL_PATTERN.fullmatch(value.strip())
+    if match is None:
+        raise ConfigValidationError(
+            "$.base_url must be an HTTP URL using localhost or 127.0.0.1 "
+            "with the /v1 path"
+        )
+
+    host = match.group(1).lower()
+    port = int(match.group(2) or "80")
+    if not 1 <= port <= 65_535:
+        raise ConfigValidationError("$.base_url port must be from 1 to 65535")
+    return host, port, match.group(3)
+
+
 def validate_llm_config(data: Any) -> dict[str, Any]:
     root = _require_object(data, "$")
     _check_for_credentials(root)
@@ -110,15 +140,22 @@ def validate_llm_config(data: Any) -> dict[str, Any]:
         raise ConfigValidationError(
             "$.config_version must be 'archseed.llm_config.v0.1'"
         )
-    if root.get("provider") != "none":
+    if root.get("provider") != "lmstudio":
         raise ConfigValidationError(
-            "$.provider must be 'none'; LLM providers are not supported yet"
+            "$.provider must be 'lmstudio'"
         )
-    if root.get("model") not in {"", "disabled"}:
-        raise ConfigValidationError("$.model must be empty or 'disabled'")
+    if root.get("mode") != "local":
+        raise ConfigValidationError("$.mode must be 'local'")
+    parse_local_base_url(root.get("base_url"))
+    if root.get("model") not in {"", "placeholder"}:
+        raise ConfigValidationError("$.model must be empty or 'placeholder'")
     if root.get("allow_external_api") is not False:
         raise ConfigValidationError(
             "$.allow_external_api must be false; external APIs are not supported"
+        )
+    if root.get("require_api_key") is not False:
+        raise ConfigValidationError(
+            "$.require_api_key must be false; API keys are not supported"
         )
 
     max_output_tokens = root.get("max_output_tokens")
@@ -160,6 +197,12 @@ def validate_llm_config(data: Any) -> dict[str, Any]:
     if contract.get("allow_executable_code") is not False:
         raise ConfigValidationError(
             "$.output_contract.allow_executable_code must be false"
+        )
+
+    notes = root.get("notes")
+    if not isinstance(notes, str) or not notes.strip() or len(notes) > 500:
+        raise ConfigValidationError(
+            "$.notes must be a non-empty string of at most 500 characters"
         )
 
     return root

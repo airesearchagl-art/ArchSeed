@@ -102,27 +102,32 @@ Console. Paste the complete `ArchSeed.import_json("...")` line printed by
 
 ### Safe LLM Configuration Design
 
-ArchSeed v0.4 includes a disabled-by-default configuration example for a future
-LLM integration:
+ArchSeed v0.4 uses LM Studio as the first local LLM server candidate. The
+example configuration uses `provider: "lmstudio"`, `mode: "local"`, and the
+default local endpoint `http://localhost:1234/v1`.
 
 ```powershell
 python tools/validate_llm_config.py config/llm_config.example.json
 ```
 
-`config/llm_config.example.json` is a design sample only. It keeps
-`provider` set to `none`, requires `allow_external_api` to be `false`, and
-limits output to ArchSeed v0.1 JSON without Markdown or executable code. Do not
-add API keys, tokens, passwords, secrets, or other credentials to this file.
+Start Local Server in LM Studio, then check its OpenAI-compatible models
+endpoint:
+
+```powershell
+python tools/check_lmstudio_server.py --config config/llm_config.example.json
+```
+
+The check performs only a local `GET /v1/models` request. It does not send a
+prompt or generate content. The validator permits only `localhost` or
+`127.0.0.1`, requires `allow_external_api` and `require_api_key` to remain
+`false`, and limits output to ArchSeed v0.1 JSON without Markdown or executable
+code.
 
 The draft session workflow remains fully local and deterministic. A future
 integration may use the same output contract before writing generated JSON and
-session records, but v0.4 does not connect to an LLM API, provider SDK, or any
-external service.
-
-For a future LLM connection, ArchSeed will first consider a local LLM server
-such as LM Studio rather than a metered cloud API. Actual LLM connectivity,
-network access, and API key management remain out of scope. LM Studio
-connection settings and connectivity checks will be handled in a later PR.
+session records, but this check does not perform LLM generation. ArchSeed does
+not use metered cloud APIs, provider SDKs, API keys, or `.env` files in this
+workflow.
 
 ## v0.1 Scope
 
