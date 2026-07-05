@@ -119,6 +119,11 @@ integration may use the same output contract before writing generated JSON and
 session records, but v0.4 does not connect to an LLM API, provider SDK, or any
 external service.
 
+For a future LLM connection, ArchSeed will first consider a local LLM server
+such as LM Studio rather than a metered cloud API. Actual LLM connectivity,
+network access, and API key management remain out of scope. LM Studio
+connection settings and connectivity checks will be handled in a later PR.
+
 ## v0.1 Scope
 
 - Define a minimal `archseed.v0.1` JSON format.
