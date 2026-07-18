@@ -31,7 +31,7 @@ except ModuleNotFoundError:
 
 
 MAX_RESPONSE_BYTES = 2_000_000
-DEFAULT_TIMEOUT_SECONDS = 60.0
+DEFAULT_TIMEOUT_SECONDS = 180.0
 
 
 class LMStudioGenerationError(RuntimeError):
@@ -126,8 +126,12 @@ def request_json(
     if len(payload_bytes) > MAX_RESPONSE_BYTES:
         raise LMStudioGenerationError("LM Studio response exceeded the safety limit.")
     if not 200 <= response.status < 300:
+        error_detail = payload_bytes.decode("utf-8", "replace").strip()
+        if len(error_detail) > 500:
+            error_detail = f"{error_detail[:500]}..."
+        suffix = f": {error_detail}" if error_detail else "."
         raise LMStudioGenerationError(
-            f"LM Studio endpoint returned HTTP {response.status}."
+            f"LM Studio endpoint returned HTTP {response.status}{suffix}"
         )
 
     try:
@@ -141,6 +145,47 @@ def request_json(
     return value
 
 
+def score_model_id(model_id: str) -> int:
+    lowered = model_id.lower()
+    if "embedding" in lowered or "embed" in lowered:
+        return -100
+
+    score = 0
+    for keyword, weight in (
+        ("instruct", 30),
+        ("coder", 20),
+        ("chat", 10),
+    ):
+        if keyword in lowered:
+            score += weight
+    return score
+
+
+def select_model_from_list(models: list[Any]) -> str:
+    candidates = [
+        model["id"].strip()
+        for model in models
+        if isinstance(model, dict)
+        and isinstance(model.get("id"), str)
+        and model["id"].strip()
+    ]
+    candidates = [
+        model_id
+        for model_id in candidates
+        if score_model_id(model_id) >= 0
+    ]
+    if not candidates:
+        raise LMStudioGenerationError(
+            "No local LM Studio chat model was reported. Load a chat model and "
+            "try again."
+        )
+
+    return max(
+        enumerate(candidates),
+        key=lambda indexed: (score_model_id(indexed[1]), -indexed[0]),
+    )[1]
+
+
 def select_model(
     validated_config: dict[str, Any],
     *,
@@ -148,7 +193,12 @@ def select_model(
     port: int,
     base_path: str,
     timeout: float,
+    model_override: str | None = None,
 ) -> str:
+    requested_model = (model_override or "").strip()
+    if requested_model:
+        return requested_model
+
     configured_model = str(validated_config.get("model", "")).strip()
     if configured_model and configured_model != "placeholder":
         return configured_model
@@ -164,15 +214,7 @@ def select_model(
     if not isinstance(models, list):
         raise LMStudioGenerationError("LM Studio models response has no model list.")
 
-    for model in models:
-        if isinstance(model, dict) and isinstance(model.get("id"), str):
-            model_id = model["id"].strip()
-            if model_id:
-                return model_id
-
-    raise LMStudioGenerationError(
-        "No local LM Studio model was reported. Load a model and try again."
-    )
+    return select_model_from_list(models)
 
 
 def extract_chat_content(payload: dict[str, Any]) -> str:
@@ -220,6 +262,7 @@ def generate_with_lmstudio(
     output_json: Path,
     output_session: Path,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    model_override: str | None = None,
 ) -> dict[str, Any]:
     config = load_json(config_path)
     validated_config = validate_llm_config(config)
@@ -231,6 +274,7 @@ def generate_with_lmstudio(
         port=port,
         base_path=base_path,
         timeout=timeout,
+        model_override=model_override,
     )
 
     request_payload = {
@@ -329,6 +373,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Draft session JSON output path.",
     )
     parser.add_argument(
+        "--model",
+        help=(
+            "Optional LM Studio model id override. The value must name a local "
+            "model exposed by the local server."
+        ),
+    )
+    parser.add_argument(
         "--timeout",
         type=float,
         default=DEFAULT_TIMEOUT_SECONDS,
@@ -350,6 +401,7 @@ def main(argv: list[str] | None = None) -> int:
             output_json=args.output_json,
             output_session=args.output_session,
             timeout=args.timeout,
+            model_override=args.model,
         )
     except (
         OSError,

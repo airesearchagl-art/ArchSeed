@@ -12,6 +12,7 @@ from tools.generate_with_lmstudio import (
     extract_json_object,
     generate_with_lmstudio,
     main as generate_with_lmstudio_main,
+    select_model_from_list,
 )
 from tools.validate_archseed import validate_archseed
 
@@ -55,6 +56,16 @@ def test_extract_json_object_accepts_surrounding_text() -> None:
 def test_extract_json_object_rejects_missing_json() -> None:
     with pytest.raises(JSONExtractionError):
         extract_json_object("not json")
+
+
+def test_select_model_prefers_chat_or_instruct_model_names() -> None:
+    models = [
+        {"id": "qwen/qwen3.6-27b"},
+        {"id": "text-embedding-nomic-embed-text-v1.5"},
+        {"id": "qwen3-coder-30b-a3b-instruct"},
+    ]
+
+    assert select_model_from_list(models) == "qwen3-coder-30b-a3b-instruct"
 
 
 def test_lmstudio_generation_rejects_non_local_base_url(
@@ -125,7 +136,7 @@ def test_lmstudio_generation_saves_valid_json_and_session(
         timeout: float,
     ) -> dict:
         calls.append((method, path))
-        assert timeout == 60.0
+        assert timeout == 180.0
         if path.endswith("/models"):
             return {"data": [{"id": "local-test-model"}]}
         assert path.endswith("/chat/completions")
@@ -167,6 +178,51 @@ def test_lmstudio_generation_saves_valid_json_and_session(
     )
     assert saved_session["generator_mode"] == "lmstudio_local_chat_completion"
     assert calls == [("GET", "/v1/models"), ("POST", "/v1/chat/completions")]
+
+
+def test_lmstudio_generation_model_override_skips_models_endpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, str]] = []
+    valid_json = {
+        "schemaVersion": "archseed.v0.1",
+        "units": "mm",
+        "project": {"name": "Override Model"},
+        "building": {
+            "footprint": {"width": 7200, "depth": 5400},
+            "levels": [{"name": "Level 1", "height": 3000}],
+        },
+    }
+
+    def fake_request_json(
+        _host: str,
+        _port: int,
+        path: str,
+        *,
+        method: str,
+        payload: dict | None = None,
+        timeout: float,
+    ) -> dict:
+        assert payload is not None
+        calls.append((method, path, payload["model"]))
+        return {
+            "choices": [
+                {"message": {"content": json.dumps(valid_json)}}
+            ]
+        }
+
+    monkeypatch.setattr(lmstudio_generate, "request_json", fake_request_json)
+    result = generate_with_lmstudio(
+        "simple house",
+        config_path=EXAMPLE_CONFIG_PATH,
+        output_json=tmp_path / "generated" / "override.v0.1.json",
+        output_session=tmp_path / "draft_sessions" / "override.session.json",
+        model_override="local-chat-model",
+    )
+
+    assert result["validation_status"] == "VALID"
+    assert calls == [("POST", "/v1/chat/completions", "local-chat-model")]
 
 
 def test_lmstudio_generation_returns_nonzero_on_validation_failure(

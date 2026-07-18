@@ -138,6 +138,14 @@ Generate an ArchSeed JSON candidate with the local LM Studio server:
 python tools/generate_with_lmstudio.py "small office with openings" --output-json generated/lmstudio_small_office_with_openings.v0.1.json --output-session draft_sessions/lmstudio_small_office_with_openings.session.json
 ```
 
+The CLI reads the local `/models` list and prefers chat-oriented model names
+such as `instruct`, `coder`, or `chat` while ignoring embedding models. If LM
+Studio exposes multiple models, specify one explicitly when needed:
+
+```powershell
+python tools/generate_with_lmstudio.py "small office with openings" --model qwen3-coder-30b-a3b-instruct --output-json generated/lmstudio_small_office_with_openings.v0.1.json --output-session draft_sessions/lmstudio_small_office_with_openings.session.json
+```
+
 The generator sends the same output-constrained prompt to the local
 `/chat/completions` endpoint, extracts the JSON object from the model response,
 writes it to `generated/`, validates it with the ArchSeed validator, and records
