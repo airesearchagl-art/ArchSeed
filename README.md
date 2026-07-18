@@ -131,13 +131,37 @@ python tools/preview_llm_prompt.py "small office with openings"
 
 The preview validates `config/llm_config.example.json` and prints the planned
 prompt to stdout. It does not contact LM Studio or perform LLM generation.
-Actual generation will be implemented in a later PR.
+
+Generate an ArchSeed JSON candidate with the local LM Studio server:
+
+```powershell
+python tools/generate_with_lmstudio.py "small office with openings" --output-json generated/lmstudio_small_office_with_openings.v0.1.json --output-session draft_sessions/lmstudio_small_office_with_openings.session.json
+```
+
+The CLI reads the local `/models` list and prefers chat-oriented model names
+such as `instruct`, `coder`, or `chat` while ignoring embedding models. If LM
+Studio exposes multiple models, specify one explicitly when needed:
+
+```powershell
+python tools/generate_with_lmstudio.py "small office with openings" --model qwen3-coder-30b-a3b-instruct --output-json generated/lmstudio_small_office_with_openings.v0.1.json --output-session draft_sessions/lmstudio_small_office_with_openings.session.json
+```
+
+The generator sends the same output-constrained prompt to the local
+`/chat/completions` endpoint, extracts the JSON object from the model response,
+writes it to `generated/`, validates it with the ArchSeed validator, and records
+the validation result plus the SketchUp import command in `draft_sessions/`.
+Markdown fences are tolerated when extracting the JSON candidate, but the
+generated result is treated only as data and is never evaluated as code.
+
+If JSON extraction or validation fails, the CLI exits with a non-zero status and
+writes an `INVALID` session record when possible. Model quality varies, so
+review the generated JSON before importing it into SketchUp.
 
 The draft session workflow remains fully local and deterministic. A future
 integration may use the same output contract before writing generated JSON and
-session records, but this check does not perform LLM generation. ArchSeed does
-not use metered cloud APIs, provider SDKs, API keys, or `.env` files in this
-workflow.
+session records. ArchSeed does not use metered cloud APIs, provider SDKs, API
+keys, or `.env` files in this workflow. Files matching `generated/*.json` and
+`draft_sessions/*.json` remain outside Git management.
 
 ## v0.1 Scope
 
@@ -262,6 +286,8 @@ ArchSeed.import_json("C:/Users/shuns/.codex/project/ArchSeed/examples/house_with
 schemas/                     JSON Schema reference
 examples/                    Minimal sample building JSON
 tools/validate_archseed.py   Local JSON validator
+tools/generate_with_lmstudio.py
+                             Local LM Studio JSON generation helper
 sketchup/archseed_loader.rb  SketchUp Ruby loader
 tests/                       Python tests for validation and safety checks
 ```
