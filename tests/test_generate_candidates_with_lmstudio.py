@@ -156,6 +156,12 @@ def test_generate_candidates_writes_comparison_session_and_best_json(
     assert saved_session["candidates"][1]["quality_metrics"][
         "footprint_area"
     ] == pytest.approx(48_000_000.0)
+    assert saved_session["candidates"][0]["quality_score_status"] == "COMPLETE"
+    assert saved_session["candidates"][0]["quality_score"] == 80
+    assert saved_session["candidates"][1]["quality_score"] == 85
+    assert saved_session["candidates"][1]["quality_score_breakdown"][
+        "repair"
+    ]["points"] == 10
     assert not list((tmp_path / "generated").rglob(".candidate_*.session.json"))
 
 
@@ -180,6 +186,10 @@ def summary_session() -> dict:
                 },
                 "quality_metrics_status": "NOT_CALCULATED",
                 "quality_metrics_warnings": ["candidate is invalid"],
+                "quality_score": None,
+                "quality_score_status": "NOT_CALCULATED",
+                "quality_score_breakdown": {},
+                "quality_score_warnings": ["candidate is invalid"],
             },
             {
                 "candidate_index": 2,
@@ -197,6 +207,24 @@ def summary_session() -> dict:
                 },
                 "quality_metrics_status": "COMPLETE",
                 "quality_metrics_warnings": [],
+                "quality_score": 100,
+                "quality_score_status": "COMPLETE",
+                "quality_score_breakdown": {
+                    "base": {"points": 50, "reason": "Base score"},
+                    "validation": {
+                        "points": 20,
+                        "reason": "Candidate is VALID",
+                    },
+                    "repair": {
+                        "points": 10,
+                        "reason": "No repair was required",
+                    },
+                    "door": {"points": 5, "reason": "Door present"},
+                    "window": {"points": 5, "reason": "Window present"},
+                    "aspect_ratio": {"points": 5, "reason": "Observed"},
+                    "opening_ratio": {"points": 5, "reason": "Observed"},
+                },
+                "quality_score_warnings": [],
             },
         ],
         "selected_candidate": selected_path,
@@ -225,10 +253,33 @@ def test_candidate_summary_contains_human_review_fields() -> None:
     assert "door_count: 1" in rendered
     assert "window_count: 2" in rendered
     assert "opening_to_wall_area_ratio: 0.08" in rendered
+    assert "quality_metrics_status: COMPLETE" in rendered
+    assert "quality_score: 100" in rendered
+    assert "quality_score_status: COMPLETE" in rendered
+    assert "quality_score_used_for_selection: no" in rendered
     assert "selected: yes" in rendered
     assert "selected_candidate:" in rendered
     assert "selection_reason:" in rendered
     assert "sketchup_import_command:" in rendered
+
+
+def test_quality_score_inherits_partial_metrics_status() -> None:
+    record = {
+        "final_validation_status": "VALID",
+        "repair_status": "NOT_NEEDED",
+        "quality_metrics_status": "PARTIAL",
+        "quality_metrics": {
+            "footprint_area": 48_000_000.0,
+            "aspect_ratio": 1.5,
+            "has_door": True,
+            "has_window": True,
+            "opening_to_wall_area_ratio": 0.2,
+        },
+    }
+    candidates_module._add_quality_score(record)
+    assert record["quality_score"] == 100
+    assert record["quality_score_status"] == "PARTIAL"
+    assert record["quality_score_warnings"]
 
 
 def test_summary_json_option_writes_concise_comparison(
@@ -254,6 +305,10 @@ def test_summary_json_option_writes_concise_comparison(
     assert saved["candidates"][1]["quality_metrics_status"] == "COMPLETE"
     assert saved["candidates"][1]["quality_metrics"]["door_count"] == 1
     assert saved["candidates"][0]["quality_metrics_warnings"]
+    assert saved["candidates"][1]["quality_score"] == 100
+    assert saved["candidates"][1]["quality_score_status"] == "COMPLETE"
+    assert saved["candidates"][1]["quality_score_breakdown"]["base"]["points"] == 50
+    assert saved["selected_quality_score"] == 100
     assert "validation_message" not in saved["candidates"][0]
     output = capsys.readouterr().out
     assert f"WROTE SUMMARY: {summary_path}" in output

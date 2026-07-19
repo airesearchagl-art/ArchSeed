@@ -9,6 +9,7 @@ from uuid import uuid4
 
 try:
     from tools.candidate_quality import calculate_candidate_quality
+    from tools.candidate_quality_score import calculate_quality_score
     from tools.generate_with_lmstudio import (
         DEFAULT_TIMEOUT_SECONDS,
         MAX_REPAIR_ATTEMPTS,
@@ -29,6 +30,7 @@ try:
     )
 except ModuleNotFoundError:
     from candidate_quality import calculate_candidate_quality
+    from candidate_quality_score import calculate_quality_score
     from generate_with_lmstudio import (
         DEFAULT_TIMEOUT_SECONDS,
         MAX_REPAIR_ATTEMPTS,
@@ -181,6 +183,24 @@ def _add_quality_metrics(record: dict[str, Any], candidate_path: Path) -> None:
     record.update(quality)
 
 
+def _add_quality_score(record: dict[str, Any]) -> None:
+    score = calculate_quality_score(
+        record.get("quality_metrics"),
+        str(record.get("final_validation_status", "INVALID")),
+        str(record.get("repair_status", "NOT_APPLICABLE")),
+    )
+    if (
+        record.get("quality_metrics_status") == "PARTIAL"
+        and score["quality_score_status"] == "COMPLETE"
+    ):
+        score["quality_score_status"] = "PARTIAL"
+        score["quality_score_warnings"] = [
+            "Candidate quality metrics are PARTIAL; the score uses only available values.",
+            *score["quality_score_warnings"],
+        ]
+    record.update(score)
+
+
 def generate_candidates(
     description: str,
     *,
@@ -248,6 +268,7 @@ def generate_candidates(
             }
         candidate_record = _candidate_record(index, candidate_path, candidate_session)
         _add_quality_metrics(candidate_record, candidate_path)
+        _add_quality_score(candidate_record)
         candidates.append(candidate_record)
 
     selected, selection_reason = select_best_candidate(candidates)
@@ -310,8 +331,26 @@ def build_candidate_summary(session: dict[str, Any]) -> dict[str, Any]:
                 "quality_metrics_warnings": candidate.get(
                     "quality_metrics_warnings", []
                 ),
+                "quality_score": candidate.get("quality_score"),
+                "quality_score_status": candidate.get(
+                    "quality_score_status", "NOT_CALCULATED"
+                ),
+                "quality_score_breakdown": candidate.get(
+                    "quality_score_breakdown", {}
+                ),
+                "quality_score_warnings": candidate.get(
+                    "quality_score_warnings", []
+                ),
             }
         )
+    selected_record = next(
+        (
+            candidate
+            for candidate in candidates
+            if candidate.get("selected")
+        ),
+        None,
+    )
     return {
         "candidate_count": session.get("candidate_count", len(candidates)),
         "candidates": candidates,
@@ -319,6 +358,9 @@ def build_candidate_summary(session: dict[str, Any]) -> dict[str, Any]:
         "selection_reason": session.get("selection_reason", ""),
         "best_candidate_json_path": session.get("best_candidate_json_path"),
         "sketchup_import_command": session.get("sketchup_import_command", ""),
+        "selected_quality_score": (
+            selected_record.get("quality_score") if selected_record else None
+        ),
     }
 
 
@@ -336,6 +378,10 @@ def format_candidate_summary(summary: dict[str, Any]) -> str:
                     f"{candidate['final_validation_status']}"
                 ),
                 f"  repaired: {metrics.get('repaired')}",
+                (
+                    "  quality_metrics_status: "
+                    f"{candidate.get('quality_metrics_status')}"
+                ),
                 f"  footprint_area: {metrics.get('footprint_area')}",
                 f"  aspect_ratio: {metrics.get('aspect_ratio')}",
                 f"  door_count: {metrics.get('door_count')}",
@@ -343,6 +389,11 @@ def format_candidate_summary(summary: dict[str, Any]) -> str:
                 (
                     "  opening_to_wall_area_ratio: "
                     f"{metrics.get('opening_to_wall_area_ratio')}"
+                ),
+                f"  quality_score: {candidate.get('quality_score')}",
+                (
+                    "  quality_score_status: "
+                    f"{candidate.get('quality_score_status')}"
                 ),
                 f"  selected: {'yes' if candidate['selected'] else 'no'}",
                 f"  json_path: {candidate['json_path']}",
@@ -353,6 +404,8 @@ def format_candidate_summary(summary: dict[str, Any]) -> str:
             "BEST CANDIDATE",
             f"  selected_candidate: {summary['selected_candidate']}",
             f"  selection_reason: {summary['selection_reason']}",
+            f"  quality_score: {summary.get('selected_quality_score')}",
+            "  quality_score_used_for_selection: no",
             (
                 "  sketchup_import_command: "
                 f"{summary['sketchup_import_command']}"
