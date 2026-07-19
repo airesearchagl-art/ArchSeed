@@ -179,6 +179,25 @@ An existing invalid file can also be repaired directly:
 python tools/repair_archseed_json.py generated/invalid.v0.1.json "$.building.footprint.width must be > 0 and <= 200000" --output generated/repaired.v0.1.json
 ```
 
+### Repair Smoke Test
+
+Create an intentionally invalid copy of a valid sample, confirm that validation
+fails, ask the local LM Studio model to repair it, and validate the result:
+
+```powershell
+python tools/create_invalid_archseed_json.py examples/small_office.v0.1.json --output generated/invalid_small_office.v0.1.json
+python tools/validate_archseed.py generated/invalid_small_office.v0.1.json
+python tools/repair_archseed_json.py generated/invalid_small_office.v0.1.json --validation-error "Generated test invalid JSON should be repaired to ArchSeed v0.1 schema" --output generated/repaired_small_office.v0.1.json
+python tools/validate_archseed.py generated/repaired_small_office.v0.1.json
+```
+
+The first validation command is expected to exit with a non-zero status. The
+helper defaults to an invalid footprint dimension; `--corruption` also accepts
+`missing-required` and `invalid-opening-wall`. Repair quality depends on the
+loaded local model and prompt response, so a failed repair requires manual JSON
+review. Both smoke-test files remain under `generated/` and outside Git
+management.
+
 Every repaired candidate is saved as data and validated before success is
 reported. The repair loop is not guaranteed to succeed; inspect the validator
 message and repair the JSON manually when all attempts fail. It uses only the
