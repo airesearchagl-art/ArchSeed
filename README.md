@@ -308,6 +308,46 @@ order remains unchanged: valid candidates without repair rank first, repaired
 valid candidates rank next, and generation order breaks ties. A future version
 may use reviewed metrics in ranking, but no metric affects selection yet.
 
+## v0.7 Candidate Quality Score
+
+Candidate Quality Score converts the deterministic quality metrics into an
+explainable observation score from 0 to 100. It uses no LLM judgment or external
+API. The same metrics, validation status, and repair status always produce the
+same score. Each candidate session and optional summary JSON records the score,
+status, warnings, and a point-by-point breakdown.
+
+The initial score starts at 50 points and applies these components:
+
+- validation: `VALID` adds 20 points. A non-`VALID` candidate is not scored.
+- repair: `VALID` without repair adds 10 points; `VALID` after repair adds 5.
+- door observation: at least one door adds 5 points.
+- window observation: at least one window adds 5 points.
+- aspect ratio: 1.0 through 2.0 adds 5 points; above 2.0 through 3.0
+  adds 2; above 3.0 subtracts 5. A value below 1.0 is left unchanged,
+  receives no points, and produces a warning.
+- opening-to-wall-area ratio: above 0 through 0.40 adds 5 points; 0 or
+  above 0.40 through 0.60 adds no points; above 0.60 subtracts 10.
+- footprint area: a positive value is required for a complete score but does
+  not add points.
+
+The final score is clamped to 0 through 100. Missing values are not inferred and
+do not receive points. `quality_score_status` is `COMPLETE` when every scored
+input is available, `PARTIAL` when available components were scored but one or
+more inputs or statuses were unavailable, and `NOT_CALCULATED` for a non-`VALID`
+candidate. Reasons are stored in `quality_score_breakdown`; missing or unusual
+inputs are stored in `quality_score_warnings`. Scores are not rescaled to 100
+when inputs are missing.
+
+Door and window points are observations for the current sample-building model;
+they do not mean that either opening type is required. The opening ratio is a
+simple extreme-value heuristic, not a building-code check. Candidate Quality
+Score does not establish regulatory compliance or prove that one architectural
+design is better than another.
+
+The score is not used by the v0.7 best-candidate selector. Selection still uses
+only final validation, no-repair preference, and generation order. Any future
+use of the score for ranking requires a separate design and pull request.
+
 ## v0.1 Scope
 
 - Define a minimal `archseed.v0.1` JSON format.
