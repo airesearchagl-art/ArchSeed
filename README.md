@@ -348,6 +348,54 @@ The score is not used by the v0.7 best-candidate selector. Selection still uses
 only final validation, no-repair preference, and generation order. Any future
 use of the score for ranking requires a separate design and pull request.
 
+## v0.7 Candidate Quality Score Analysis
+
+The local score analysis CLI aggregates saved Candidate Session JSON and
+Candidate Summary JSON without regenerating candidates or recalculating their
+scores. It observes score concentration, status distribution, session ties,
+selected-candidate relationships, breakdown points, and warnings. It uses only
+Python's standard library and makes no network or LLM requests.
+
+Analyze explicit files or a shell-expanded list:
+
+```powershell
+python tools/analyze_candidate_scores.py draft_sessions/session01.json draft_sessions/session02.json
+```
+
+Use `--input` when the shell does not expand globs, and optionally save a JSON
+report. Missing output directories are created automatically.
+
+```powershell
+python tools/analyze_candidate_scores.py --input "draft_sessions/*.summary.json" --output draft_sessions/score_analysis.json
+```
+
+The report includes candidate counts; score status, validation, and repair
+distributions; minimum, maximum, mean, median, modes, frequencies, and 100-point
+concentration; session tie observations; selected-score comparisons; breakdown
+statistics; and warning frequencies. Integer scores use keys such as `"100"`.
+Finite non-integer scores use Python's stable shortest round-trip representation,
+such as `"82.5"`, so distinct stored floats are not intentionally rounded into
+one bucket. Boolean, NaN, and infinite values are not treated as scores.
+
+Full Candidate Session JSON files have a reliable session boundary and are used
+for tie and selected-candidate comparisons. Candidate Summary JSON records still
+contribute to overall distributions, but are excluded from session comparisons
+when no reliable session identity is present. Session and summary inputs are not
+automatically deduplicated; identifiable duplicate candidates are retained and
+reported as possible duplicates.
+
+One unreadable or unsupported file does not stop other inputs from being
+analyzed. Exit code `0` means every input was processed, `2` means at least one
+input succeeded and at least one failed, and `1` means no input was supplied or
+all inputs failed. Failed-file paths are stored as workspace-relative paths or
+filenames, not local absolute paths.
+
+Analysis reports under `draft_sessions/*.json` remain excluded from Git by the
+existing ignore rule. The analysis does not change Candidate Quality Score,
+does not affect best-candidate selection, and cannot establish regulatory
+compliance or architectural quality. Ranking remains a separate future change;
+see `docs/candidate_ranking_design.md` for the decision inputs.
+
 ## v0.1 Scope
 
 - Define a minimal `archseed.v0.1` JSON format.
