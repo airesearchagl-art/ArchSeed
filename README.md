@@ -218,6 +218,34 @@ does not use metered cloud APIs, provider SDKs, API keys, or `.env` files in thi
 workflow. Files matching `generated/*.json` and `draft_sessions/*.json` remain
 outside Git management.
 
+## v0.6 Multiple Candidates
+
+ArchSeed v0.6 can ask the configured LM Studio local server for multiple JSON
+candidates, validate each candidate, optionally apply the existing repair loop,
+and select one best candidate:
+
+```powershell
+python tools/generate_candidates_with_lmstudio.py "small office with openings" --count 3 --repair-attempts 1
+```
+
+`--count` accepts 1 through 5 and defaults to 3. Each run writes candidates to
+`generated/candidates/<run_id>/candidate_XX.v0.1.json`, copies the selected JSON
+to `generated/candidates/<run_id>/best_candidate.v0.1.json`, and records the
+comparison in `draft_sessions/<run_id>.candidates.session.json`.
+
+Selection is deterministic: a `VALID` candidate is required, a candidate that
+is valid without repair ranks above a repaired `VALID` candidate, and ties go
+to the earlier candidate. The session records each candidate's validation and
+repair status, `selected_candidate`, `selection_reason`, and the SketchUp import
+command for the copied best candidate.
+
+Files under `generated/candidates/`, including the best candidate, and files
+matching `draft_sessions/*.json` are local artifacts outside Git management.
+The workflow uses only LM Studio on `localhost` or `127.0.0.1`; it uses no API
+key, external cloud API, or metered API. Selection confirms schema validity,
+not architectural quality. Review the best candidate and its imported SketchUp
+model visually before accepting it.
+
 ## v0.1 Scope
 
 - Define a minimal `archseed.v0.1` JSON format.

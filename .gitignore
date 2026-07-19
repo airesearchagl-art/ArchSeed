@@ -27,5 +27,6 @@ Thumbs.db
 exports/
 dist/
 generated/*.json
+generated/candidates/**/*.json
 draft_sessions/*.json
 !draft_sessions/.gitkeep
