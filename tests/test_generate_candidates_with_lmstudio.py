@@ -227,6 +227,41 @@ def test_summary_json_option_writes_concise_comparison(
     assert "CANDIDATE SUMMARY" in output
 
 
+def test_failed_generation_still_writes_requested_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session = summary_session()
+    session["candidates"] = [session["candidates"][0]]
+    session["candidate_count"] = 1
+    session["selected_candidate"] = None
+    session["selection_reason"] = "No candidate finished with VALID ArchSeed JSON."
+    session["best_candidate_json_path"] = None
+    session["sketchup_import_command"] = ""
+    summary_path = tmp_path / "draft_sessions" / "failed.summary.json"
+
+    def fail_with_session(*_args: object, **_kwargs: object) -> dict:
+        raise CandidateGenerationError(
+            session["selection_reason"],
+            session=session,
+        )
+
+    monkeypatch.setattr(candidates_module, "generate_candidates", fail_with_session)
+    assert candidates_main(
+        ["small office", "--summary-json", str(summary_path)]
+    ) == 1
+
+    saved = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert saved["selected_candidate"] is None
+    assert saved["selection_reason"] == session["selection_reason"]
+    assert saved["sketchup_import_command"] == ""
+    assert saved["candidates"][0]["final_validation_status"] == "INVALID"
+    captured = capsys.readouterr()
+    assert "CANDIDATE SUMMARY" in captured.out
+    assert "Candidate generation failed" in captured.err
+
+
 def test_generate_candidates_rejects_non_local_config_before_generation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -273,7 +308,7 @@ def test_generate_candidates_rejects_when_no_valid_candidate(
         raise ValidationError("fixture")
 
     monkeypatch.setattr(candidates_module, "generate_with_lmstudio", fake_invalid)
-    with pytest.raises(CandidateGenerationError, match="No candidate"):
+    with pytest.raises(CandidateGenerationError, match="No candidate") as exc_info:
         generate_candidates(
             "small office",
             count=2,
@@ -282,6 +317,9 @@ def test_generate_candidates_rejects_when_no_valid_candidate(
             session_root=tmp_path / "sessions",
             run_id="invalid-run",
         )
+
+    assert exc_info.value.session is not None
+    assert exc_info.value.session["selected_candidate"] is None
 
     aggregate = tmp_path / "sessions" / "invalid-run.candidates.session.json"
     saved = json.loads(aggregate.read_text(encoding="utf-8"))

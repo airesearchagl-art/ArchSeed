@@ -55,7 +55,14 @@ DEFAULT_SESSION_ROOT = Path("draft_sessions")
 
 
 class CandidateGenerationError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        session: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.session = session
 
 
 def candidate_count(value: str) -> int:
@@ -245,7 +252,7 @@ def generate_candidates(
     session["session_path"] = aggregate_session_path.expanduser().resolve().as_posix()
 
     if selected is None:
-        raise CandidateGenerationError(selection_reason)
+        raise CandidateGenerationError(selection_reason, session=session)
     return session
 
 
@@ -372,11 +379,21 @@ def main(argv: list[str] | None = None) -> int:
         summary = build_candidate_summary(session)
         if args.summary_json is not None:
             write_json(args.summary_json, summary)
+    except CandidateGenerationError as exc:
+        if exc.session is not None:
+            failed_summary = build_candidate_summary(exc.session)
+            if args.summary_json is not None:
+                write_json(args.summary_json, failed_summary)
+            print(f"WROTE SESSION: {exc.session['session_path']}")
+            if args.summary_json is not None:
+                print(f"WROTE SUMMARY: {args.summary_json}")
+            print(format_candidate_summary(failed_summary))
+        print(f"Candidate generation failed: {exc}", file=sys.stderr)
+        return 1
     except (
         OSError,
         json.JSONDecodeError,
         ConfigValidationError,
-        CandidateGenerationError,
     ) as exc:
         print(f"Candidate generation failed: {exc}", file=sys.stderr)
         return 1
