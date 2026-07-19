@@ -280,11 +280,15 @@ The initial metrics are:
 - `opening_count`, `door_count`, and `window_count`: counts from
   `building.openings`.
 - `total_opening_area`: sum of `width_mm * height_mm` for all openings, in
-  square millimeters (`mm^2`).
+  square millimeters (`mm^2`). This is the simple sum of each opening's nominal
+  rectangular area, not the union area of overlapping openings or the area of
+  actual wall cutouts.
 - `opening_to_wall_area_ratio`: total opening area divided by gross generated
-  exterior wall face area. Gross wall area is the footprint perimeter
-  multiplied by the sum of each level's generated wall height
-  (`level.height - slabThickness`). The ratio is unitless.
+  exterior wall face area. Gross wall area is the sum of the exterior perimeter
+  wall face area across all levels. Each level uses the generated wall height
+  `level.height - slabThickness`. It is measured before subtracting openings,
+  excludes interior walls, and does not include the roof parapet. The ratio is
+  unitless.
 - `has_door` and `has_window`: whether at least one matching opening exists.
 - `repaired`: whether the candidate reached `VALID` through the existing repair
   loop.
@@ -298,10 +302,11 @@ not infer missing dimensions. Details are recorded in
 The opening-to-wall ratio remains `null` when gross wall area is unavailable or
 zero, avoiding division by zero.
 
-These v0.7 metrics are observational only. The v0.6 candidate selection order
-remains unchanged: valid candidates without repair rank first, repaired valid
-candidates rank next, and generation order breaks ties. A future version may
-use reviewed metrics in ranking, but no metric affects selection yet.
+These v0.7 metrics are observational only. They do not guarantee architectural
+quality or compliance with building regulations. The v0.6 candidate selection
+order remains unchanged: valid candidates without repair rank first, repaired
+valid candidates rank next, and generation order breaks ties. A future version
+may use reviewed metrics in ranking, but no metric affects selection yet.
 
 ## v0.1 Scope
 

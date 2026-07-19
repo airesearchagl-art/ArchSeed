@@ -68,6 +68,90 @@ def test_opening_counts_and_area_are_deterministic() -> None:
     assert metrics["repaired"] is True
 
 
+def test_wall_area_sums_generated_clear_height_across_levels() -> None:
+    data = load_example("simple_house.v0.1.json")
+    data["building"]["openings"] = [
+        {
+            "type": "window",
+            "level": "Level 1",
+            "wall": "south",
+            "offset_mm": 1000,
+            "width_mm": 1000,
+            "height_mm": 1000,
+            "sill_height_mm": 900,
+        }
+    ]
+
+    result = calculate_candidate_quality(
+        data, repaired=False, validation_status="VALID"
+    )
+    expected_wall_area = 2 * (7200 + 5400) * ((3000 - 180) + (2800 - 180))
+    assert result["quality_metrics"][
+        "opening_to_wall_area_ratio"
+    ] == pytest.approx(1_000_000 / expected_wall_area)
+
+
+def test_wall_area_uses_validator_default_slab_thickness_when_omitted() -> None:
+    data = load_example("simple_house.v0.1.json")
+    data["building"].pop("slabThickness")
+    data["building"]["openings"] = [
+        {
+            "type": "door",
+            "level": "Level 1",
+            "wall": "south",
+            "offset_mm": 1000,
+            "width_mm": 1000,
+            "height_mm": 2000,
+        }
+    ]
+
+    result = calculate_candidate_quality(
+        data, repaired=False, validation_status="VALID"
+    )
+    expected_wall_area = 2 * (7200 + 5400) * ((3000 - 180) + (2800 - 180))
+    assert result["quality_metrics"][
+        "opening_to_wall_area_ratio"
+    ] == pytest.approx(2_000_000 / expected_wall_area)
+
+
+def test_empty_openings_have_zero_complete_metrics() -> None:
+    data = load_example("simple_house.v0.1.json")
+    data["building"]["openings"] = []
+
+    result = calculate_candidate_quality(
+        data, repaired=False, validation_status="VALID"
+    )
+    metrics = result["quality_metrics"]
+    assert metrics["opening_count"] == 0
+    assert metrics["total_opening_area"] == 0
+    assert metrics["opening_to_wall_area_ratio"] == 0
+    assert result["quality_metrics_status"] == "COMPLETE"
+
+
+def test_roof_parapet_height_is_not_added_to_gross_wall_area() -> None:
+    data = load_example("simple_house.v0.1.json")
+    data["building"]["openings"] = [
+        {
+            "type": "window",
+            "level": "Level 2",
+            "wall": "north",
+            "offset_mm": 1000,
+            "width_mm": 1000,
+            "height_mm": 1000,
+            "sill_height_mm": 900,
+        }
+    ]
+    data["building"]["roof"]["parapetHeight"] = 10_000
+
+    result = calculate_candidate_quality(
+        data, repaired=False, validation_status="VALID"
+    )
+    expected_wall_area = 2 * (7200 + 5400) * ((3000 - 180) + (2800 - 180))
+    assert result["quality_metrics"][
+        "opening_to_wall_area_ratio"
+    ] == pytest.approx(1_000_000 / expected_wall_area)
+
+
 def test_zero_generated_wall_area_returns_null_ratio_and_warning() -> None:
     data = load_example("compact_house.v0.1.json")
     data["building"]["levels"][0]["height"] = data["building"]["slabThickness"]
