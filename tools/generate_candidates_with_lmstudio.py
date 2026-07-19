@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 try:
+    from tools.candidate_quality import calculate_candidate_quality
     from tools.generate_with_lmstudio import (
         DEFAULT_TIMEOUT_SECONDS,
         MAX_REPAIR_ATTEMPTS,
@@ -27,6 +28,7 @@ try:
         validate_llm_config,
     )
 except ModuleNotFoundError:
+    from candidate_quality import calculate_candidate_quality
     from generate_with_lmstudio import (
         DEFAULT_TIMEOUT_SECONDS,
         MAX_REPAIR_ATTEMPTS,
@@ -151,6 +153,34 @@ def _candidate_record(
     }
 
 
+def _add_quality_metrics(record: dict[str, Any], candidate_path: Path) -> None:
+    final_status = str(record["final_validation_status"])
+    candidate_json: dict[str, Any] | None = None
+    warnings: list[str] = []
+    if final_status == "VALID":
+        try:
+            loaded = json.loads(candidate_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                candidate_json = loaded
+            else:
+                warnings.append("Candidate JSON root is not an object.")
+        except (OSError, json.JSONDecodeError) as exc:
+            warnings.append(f"Candidate JSON could not be read for metrics: {exc}")
+
+    quality = calculate_candidate_quality(
+        candidate_json,
+        repaired=record.get("repair_status") == "SUCCEEDED",
+        validation_status=final_status,
+    )
+    if warnings:
+        quality["quality_metrics_status"] = "PARTIAL"
+        quality["quality_metrics_warnings"] = [
+            *warnings,
+            *quality["quality_metrics_warnings"],
+        ]
+    record.update(quality)
+
+
 def generate_candidates(
     description: str,
     *,
@@ -216,7 +246,9 @@ def generate_candidates(
                 "repair_messages": [],
                 "final_validation_status": "INVALID",
             }
-        candidates.append(_candidate_record(index, candidate_path, candidate_session))
+        candidate_record = _candidate_record(index, candidate_path, candidate_session)
+        _add_quality_metrics(candidate_record, candidate_path)
+        candidates.append(candidate_record)
 
     selected, selection_reason = select_best_candidate(candidates)
     best_candidate_path = run_directory / "best_candidate.v0.1.json"
@@ -271,6 +303,13 @@ def build_candidate_summary(session: dict[str, Any]) -> dict[str, Any]:
                 ),
                 "selected": json_path == selected_candidate,
                 "json_path": json_path,
+                "quality_metrics": candidate.get("quality_metrics", {}),
+                "quality_metrics_status": candidate.get(
+                    "quality_metrics_status", "NOT_CALCULATED"
+                ),
+                "quality_metrics_warnings": candidate.get(
+                    "quality_metrics_warnings", []
+                ),
             }
         )
     return {
@@ -286,6 +325,7 @@ def build_candidate_summary(session: dict[str, Any]) -> dict[str, Any]:
 def format_candidate_summary(summary: dict[str, Any]) -> str:
     lines = ["CANDIDATE SUMMARY"]
     for candidate in summary["candidates"]:
+        metrics = candidate.get("quality_metrics", {})
         lines.extend(
             [
                 f"Candidate {int(candidate['candidate_index']):02d}",
@@ -294,6 +334,15 @@ def format_candidate_summary(summary: dict[str, Any]) -> str:
                 (
                     "  final_validation_status: "
                     f"{candidate['final_validation_status']}"
+                ),
+                f"  repaired: {metrics.get('repaired')}",
+                f"  footprint_area: {metrics.get('footprint_area')}",
+                f"  aspect_ratio: {metrics.get('aspect_ratio')}",
+                f"  door_count: {metrics.get('door_count')}",
+                f"  window_count: {metrics.get('window_count')}",
+                (
+                    "  opening_to_wall_area_ratio: "
+                    f"{metrics.get('opening_to_wall_area_ratio')}"
                 ),
                 f"  selected: {'yes' if candidate['selected'] else 'no'}",
                 f"  json_path: {candidate['json_path']}",

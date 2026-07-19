@@ -261,6 +261,53 @@ key, external cloud API, or metered API. Selection confirms schema validity,
 not architectural quality. Review the best candidate and its imported SketchUp
 model visually before accepting it.
 
+## v0.7 Candidate Quality Metrics
+
+ArchSeed v0.7 begins recording deterministic quality metrics for each candidate
+after final validation. These metrics make valid candidates easier to compare
+without asking an LLM to assign a subjective score. They are included in the
+full candidate session, the stdout comparison, and optional `--summary-json`
+output.
+
+The initial metrics are:
+
+- `footprint_area`: footprint width multiplied by depth, in square millimeters
+  (`mm^2`).
+- `aspect_ratio`: the longer footprint dimension divided by the shorter one;
+  unitless and always at least 1 for valid dimensions.
+- `wall_count`: four generated exterior wall runs per level for the current
+  rectangular footprint model.
+- `opening_count`, `door_count`, and `window_count`: counts from
+  `building.openings`.
+- `total_opening_area`: sum of `width_mm * height_mm` for all openings, in
+  square millimeters (`mm^2`). This is the simple sum of each opening's nominal
+  rectangular area, not the union area of overlapping openings or the area of
+  actual wall cutouts.
+- `opening_to_wall_area_ratio`: total opening area divided by gross generated
+  exterior wall face area. Gross wall area is the sum of the exterior perimeter
+  wall face area across all levels. Each level uses the generated wall height
+  `level.height - slabThickness`. It is measured before subtracting openings,
+  excludes interior walls, and does not include the roof parapet. The ratio is
+  unitless.
+- `has_door` and `has_window`: whether at least one matching opening exists.
+- `repaired`: whether the candidate reached `VALID` through the existing repair
+  loop.
+- `validation_status`: the candidate's final validation status used when the
+  metrics were calculated.
+
+Metrics that cannot be calculated from the candidate are `null`; ArchSeed does
+not infer missing dimensions. Details are recorded in
+`quality_metrics_warnings`, and `quality_metrics_status` is `COMPLETE`,
+`PARTIAL`, or `NOT_CALCULATED`. Non-`VALID` candidates are not force-scored.
+The opening-to-wall ratio remains `null` when gross wall area is unavailable or
+zero, avoiding division by zero.
+
+These v0.7 metrics are observational only. They do not guarantee architectural
+quality or compliance with building regulations. The v0.6 candidate selection
+order remains unchanged: valid candidates without repair rank first, repaired
+valid candidates rank next, and generation order breaks ties. A future version
+may use reviewed metrics in ranking, but no metric affects selection yet.
+
 ## v0.1 Scope
 
 - Define a minimal `archseed.v0.1` JSON format.

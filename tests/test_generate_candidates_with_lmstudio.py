@@ -151,6 +151,11 @@ def test_generate_candidates_writes_comparison_session_and_best_json(
     assert saved_session["selection_reason"] == session["selection_reason"]
     assert saved_session["candidates"][0]["validation_status"] == "INVALID"
     assert saved_session["candidates"][0]["repair_status"] == "SUCCEEDED"
+    assert saved_session["candidates"][0]["quality_metrics_status"] == "COMPLETE"
+    assert saved_session["candidates"][0]["quality_metrics"]["repaired"] is True
+    assert saved_session["candidates"][1]["quality_metrics"][
+        "footprint_area"
+    ] == pytest.approx(48_000_000.0)
     assert not list((tmp_path / "generated").rglob(".candidate_*.session.json"))
 
 
@@ -165,6 +170,16 @@ def summary_session() -> dict:
                 "validation_status": "INVALID",
                 "repair_status": "FAILED",
                 "final_validation_status": "INVALID",
+                "quality_metrics": {
+                    "repaired": False,
+                    "footprint_area": None,
+                    "aspect_ratio": None,
+                    "door_count": None,
+                    "window_count": None,
+                    "opening_to_wall_area_ratio": None,
+                },
+                "quality_metrics_status": "NOT_CALCULATED",
+                "quality_metrics_warnings": ["candidate is invalid"],
             },
             {
                 "candidate_index": 2,
@@ -172,6 +187,16 @@ def summary_session() -> dict:
                 "validation_status": "VALID",
                 "repair_status": "NOT_NEEDED",
                 "final_validation_status": "VALID",
+                "quality_metrics": {
+                    "repaired": False,
+                    "footprint_area": 48_000_000.0,
+                    "aspect_ratio": 4 / 3,
+                    "door_count": 1,
+                    "window_count": 2,
+                    "opening_to_wall_area_ratio": 0.08,
+                },
+                "quality_metrics_status": "COMPLETE",
+                "quality_metrics_warnings": [],
             },
         ],
         "selected_candidate": selected_path,
@@ -195,6 +220,11 @@ def test_candidate_summary_contains_human_review_fields() -> None:
     assert "Candidate 02" in rendered
     assert "validation_status: VALID" in rendered
     assert "repair_status: NOT_NEEDED" in rendered
+    assert "footprint_area: 48000000.0" in rendered
+    assert "aspect_ratio:" in rendered
+    assert "door_count: 1" in rendered
+    assert "window_count: 2" in rendered
+    assert "opening_to_wall_area_ratio: 0.08" in rendered
     assert "selected: yes" in rendered
     assert "selected_candidate:" in rendered
     assert "selection_reason:" in rendered
@@ -221,6 +251,9 @@ def test_summary_json_option_writes_concise_comparison(
     assert saved["selection_reason"] == session["selection_reason"]
     assert saved["sketchup_import_command"] == session["sketchup_import_command"]
     assert saved["candidates"][1]["selected"] is True
+    assert saved["candidates"][1]["quality_metrics_status"] == "COMPLETE"
+    assert saved["candidates"][1]["quality_metrics"]["door_count"] == 1
+    assert saved["candidates"][0]["quality_metrics_warnings"]
     assert "validation_message" not in saved["candidates"][0]
     output = capsys.readouterr().out
     assert f"WROTE SUMMARY: {summary_path}" in output
