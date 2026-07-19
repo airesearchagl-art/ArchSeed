@@ -228,6 +228,12 @@ and select one best candidate:
 python tools/generate_candidates_with_lmstudio.py "small office with openings" --count 3 --repair-attempts 1
 ```
 
+Save the concise comparison as JSON when a review artifact is useful:
+
+```powershell
+python tools/generate_candidates_with_lmstudio.py "small office with openings" --count 3 --repair-attempts 1 --summary-json draft_sessions/candidates.summary.json
+```
+
 `--count` accepts 1 through 5 and defaults to 3. Each run writes candidates to
 `generated/candidates/<run_id>/candidate_XX.v0.1.json`, copies the selected JSON
 to `generated/candidates/<run_id>/best_candidate.v0.1.json`, and records the
@@ -239,8 +245,17 @@ to the earlier candidate. The session records each candidate's validation and
 repair status, `selected_candidate`, `selection_reason`, and the SketchUp import
 command for the copied best candidate.
 
+After generation, stdout lists each candidate's index, validation status,
+repair status, final validation status, selection flag, and JSON path. The
+`BEST CANDIDATE` section shows `selected_candidate`, explains the ranking in
+`selection_reason`, and prints the complete `ArchSeed.import_json("...")` line
+to paste into the SketchUp Ruby Console. The optional summary JSON contains the
+same concise comparison without duplicating detailed validation and repair
+messages from the full candidate session.
+
 Files under `generated/candidates/`, including the best candidate, and files
-matching `draft_sessions/*.json` are local artifacts outside Git management.
+matching `draft_sessions/*.json`, including summary JSON files, are local
+artifacts outside Git management.
 The workflow uses only LM Studio on `localhost` or `127.0.0.1`; it uses no API
 key, external cloud API, or metered API. Selection confirms schema validity,
 not architectural quality. Review the best candidate and its imported SketchUp

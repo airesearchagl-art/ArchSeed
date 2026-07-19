@@ -249,6 +249,63 @@ def generate_candidates(
     return session
 
 
+def build_candidate_summary(session: dict[str, Any]) -> dict[str, Any]:
+    selected_candidate = session.get("selected_candidate")
+    candidates = []
+    for candidate in session.get("candidates", []):
+        json_path = candidate.get("json_path")
+        candidates.append(
+            {
+                "candidate_index": candidate.get("candidate_index"),
+                "validation_status": candidate.get("validation_status"),
+                "repair_status": candidate.get("repair_status"),
+                "final_validation_status": candidate.get(
+                    "final_validation_status"
+                ),
+                "selected": json_path == selected_candidate,
+                "json_path": json_path,
+            }
+        )
+    return {
+        "candidate_count": session.get("candidate_count", len(candidates)),
+        "candidates": candidates,
+        "selected_candidate": selected_candidate,
+        "selection_reason": session.get("selection_reason", ""),
+        "best_candidate_json_path": session.get("best_candidate_json_path"),
+        "sketchup_import_command": session.get("sketchup_import_command", ""),
+    }
+
+
+def format_candidate_summary(summary: dict[str, Any]) -> str:
+    lines = ["CANDIDATE SUMMARY"]
+    for candidate in summary["candidates"]:
+        lines.extend(
+            [
+                f"Candidate {int(candidate['candidate_index']):02d}",
+                f"  validation_status: {candidate['validation_status']}",
+                f"  repair_status: {candidate['repair_status']}",
+                (
+                    "  final_validation_status: "
+                    f"{candidate['final_validation_status']}"
+                ),
+                f"  selected: {'yes' if candidate['selected'] else 'no'}",
+                f"  json_path: {candidate['json_path']}",
+            ]
+        )
+    lines.extend(
+        [
+            "BEST CANDIDATE",
+            f"  selected_candidate: {summary['selected_candidate']}",
+            f"  selection_reason: {summary['selection_reason']}",
+            (
+                "  sketchup_import_command: "
+                f"{summary['sketchup_import_command']}"
+            ),
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Generate, compare, and select local LM Studio ArchSeed candidates."
@@ -282,6 +339,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_TIMEOUT_SECONDS,
         help="Local server timeout in seconds for each candidate.",
     )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        help="Optional human-readable candidate comparison JSON output path.",
+    )
     return parser
 
 
@@ -307,6 +369,9 @@ def main(argv: list[str] | None = None) -> int:
             timeout=args.timeout,
             model_override=args.model,
         )
+        summary = build_candidate_summary(session)
+        if args.summary_json is not None:
+            write_json(args.summary_json, summary)
     except (
         OSError,
         json.JSONDecodeError,
@@ -317,9 +382,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"WROTE SESSION: {session['session_path']}")
-    print(f"SELECTED: {session['selected_candidate']}")
-    print(f"REASON: {session['selection_reason']}")
-    print(session["sketchup_import_command"])
+    if args.summary_json is not None:
+        print(f"WROTE SUMMARY: {args.summary_json}")
+    print(format_candidate_summary(summary))
     return 0
 
 
