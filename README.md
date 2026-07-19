@@ -189,6 +189,7 @@ python tools/create_invalid_archseed_json.py examples/small_office.v0.1.json --o
 python tools/validate_archseed.py generated/invalid_small_office.v0.1.json
 python tools/repair_archseed_json.py generated/invalid_small_office.v0.1.json --validation-error "Generated test invalid JSON should be repaired to ArchSeed v0.1 schema" --output generated/repaired_small_office.v0.1.json
 python tools/validate_archseed.py generated/repaired_small_office.v0.1.json
+python tools/print_sketchup_import_command.py generated/repaired_small_office.v0.1.json
 ```
 
 The first validation command is expected to exit with a non-zero status. The
@@ -197,6 +198,14 @@ helper defaults to an invalid footprint dimension; `--corruption` also accepts
 loaded local model and prompt response, so a failed repair requires manual JSON
 review. Both smoke-test files remain under `generated/` and outside Git
 management.
+
+After the repaired JSON is `VALID`, paste the complete
+`ArchSeed.import_json("...")` line printed by
+`tools/print_sketchup_import_command.py` into the SketchUp Ruby Console. Do not
+paste a `file:///...` URL. Repair restores compatibility with the ArchSeed JSON
+validation rules; it does not guarantee architectural quality. Inspect the
+generated dimensions, openings, geometry, Tags, Outliner hierarchy, and
+materials in SketchUp before accepting the result.
 
 Every repaired candidate is saved as data and validated before success is
 reported. The repair loop is not guaranteed to succeed; inspect the validator

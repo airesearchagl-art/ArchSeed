@@ -66,6 +66,18 @@ def test_readme_contains_repair_smoke_test_commands() -> None:
     assert "generated/repaired_small_office.v0.1.json" in readme
 
 
+def test_readme_contains_repaired_json_import_check() -> None:
+    readme = README_PATH.read_text(encoding="utf-8")
+
+    assert (
+        "tools/print_sketchup_import_command.py "
+        "generated/repaired_small_office.v0.1.json"
+    ) in readme
+    assert 'ArchSeed.import_json("...")' in readme
+    assert "Do not\npaste a `file:///...` URL" in readme
+    assert "does not guarantee architectural quality" in readme
+
+
 def test_generated_outputs_remain_ignored() -> None:
     patterns = GITIGNORE_PATH.read_text(encoding="utf-8").splitlines()
 
