@@ -32,6 +32,7 @@ except ModuleNotFoundError:
 
 MAX_RESPONSE_BYTES = 2_000_000
 DEFAULT_TIMEOUT_SECONDS = 180.0
+MAX_REPAIR_ATTEMPTS = 3
 
 
 class LMStudioGenerationError(RuntimeError):
@@ -240,6 +241,10 @@ def build_session(
     validation_message: str,
     model: str | None,
     notes: str,
+    repair_attempts: int = 0,
+    repair_status: str = "NOT_REQUESTED",
+    repair_messages: list[str] | None = None,
+    final_validation_status: str | None = None,
 ) -> dict[str, Any]:
     return {
         "user_prompt": description,
@@ -249,6 +254,10 @@ def build_session(
         .as_posix(),
         "validation_status": validation_status,
         "validation_message": validation_message,
+        "repair_attempts": repair_attempts,
+        "repair_status": repair_status,
+        "repair_messages": repair_messages or [],
+        "final_validation_status": final_validation_status or validation_status,
         "sketchup_import_command": build_import_command(output_json),
         "created_at": utc_now(),
         "notes": notes if model is None else f"{notes} Model: {model}.",
@@ -263,7 +272,13 @@ def generate_with_lmstudio(
     output_session: Path,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     model_override: str | None = None,
+    repair_attempts: int = 0,
 ) -> dict[str, Any]:
+    if not 0 <= repair_attempts <= MAX_REPAIR_ATTEMPTS:
+        raise LMStudioGenerationError(
+            f"repair_attempts must be between 0 and {MAX_REPAIR_ATTEMPTS}."
+        )
+
     config = load_json(config_path)
     validated_config = validate_llm_config(config)
     host, port, base_path = parse_local_base_url(validated_config["base_url"])
@@ -312,27 +327,106 @@ def generate_with_lmstudio(
                 "Local LM Studio generation failed before a valid ArchSeed JSON "
                 "candidate could be saved. No external cloud API or API key was used."
             ),
+            repair_status="NOT_APPLICABLE",
+            final_validation_status="INVALID",
         )
         write_json(output_session, session)
         raise
 
     write_json(output_json, generated)
+    validation_error: ValidationError | None = None
     try:
         validate_archseed(generated)
     except ValidationError as exc:
+        validation_error = exc
+
+    repair_messages: list[str] = []
+    attempts_used = 0
+    repair_status = "NOT_NEEDED" if validation_error is None else "NOT_REQUESTED"
+    repair_error: LMStudioGenerationError | JSONExtractionError | None = None
+
+    if validation_error is not None and repair_attempts > 0:
+        try:
+            from tools.repair_archseed_json import build_repair_prompt
+        except ModuleNotFoundError:
+            from repair_archseed_json import build_repair_prompt
+
+        repair_status = "FAILED"
+        for attempt in range(1, repair_attempts + 1):
+            attempts_used = attempt
+            repair_messages.append(
+                f"Attempt {attempt}: validation error: {validation_error}"
+            )
+            repair_payload = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": build_repair_prompt(
+                            generated,
+                            str(validation_error),
+                            validated_config,
+                        ),
+                    }
+                ],
+                "temperature": validated_config["temperature"],
+                "max_tokens": validated_config["max_output_tokens"],
+                "stream": False,
+            }
+            try:
+                response_payload = request_json(
+                    host,
+                    port,
+                    f"{base_path.rstrip('/')}/chat/completions",
+                    method="POST",
+                    payload=repair_payload,
+                    timeout=timeout,
+                )
+                generated = extract_json_object(
+                    extract_chat_content(response_payload)
+                )
+            except (LMStudioGenerationError, JSONExtractionError) as exc:
+                repair_error = exc
+                repair_messages.append(
+                    f"Attempt {attempt}: repair request failed: {exc}"
+                )
+                break
+
+            write_json(output_json, generated)
+            try:
+                validate_archseed(generated)
+            except ValidationError as exc:
+                validation_error = exc
+                repair_messages.append(
+                    f"Attempt {attempt}: repaired JSON remains invalid: {exc}"
+                )
+            else:
+                validation_error = None
+                repair_status = "SUCCEEDED"
+                repair_messages.append(
+                    f"Attempt {attempt}: repaired JSON is VALID."
+                )
+                break
+
+    if validation_error is not None:
+        failure = repair_error or validation_error
         session = build_session(
             description=description,
             output_json=output_json,
             validation_status="INVALID",
-            validation_message=f"INVALID: {exc}",
+            validation_message=f"INVALID: {failure}",
             model=model,
             notes=(
                 "Local LM Studio response was saved but failed ArchSeed validation. "
                 "Treat it as data only; it is not executable code."
             ),
+            repair_attempts=attempts_used,
+            repair_status=repair_status,
+            repair_messages=repair_messages,
+            final_validation_status="INVALID",
         )
         write_json(output_session, session)
-        raise
+        raise failure
 
     session = build_session(
         description=description,
@@ -344,6 +438,10 @@ def generate_with_lmstudio(
             "Generated by LM Studio local server and validated as ArchSeed JSON. "
             "No external cloud API or API key was used."
         ),
+        repair_attempts=attempts_used,
+        repair_status=repair_status,
+        repair_messages=repair_messages,
+        final_validation_status="VALID",
     )
     write_json(output_session, session)
     return session
@@ -380,6 +478,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--repair-attempts",
+        type=int,
+        default=0,
+        help=(
+            "Repair invalid generated JSON with the local model (0-3 attempts; "
+            "default: 0)."
+        ),
+    )
+    parser.add_argument(
         "--timeout",
         type=float,
         default=DEFAULT_TIMEOUT_SECONDS,
@@ -393,6 +500,12 @@ def main(argv: list[str] | None = None) -> int:
     if not 0 < args.timeout <= 300:
         print("INVALID: --timeout must be greater than 0 and at most 300.", file=sys.stderr)
         return 2
+    if not 0 <= args.repair_attempts <= MAX_REPAIR_ATTEMPTS:
+        print(
+            f"INVALID: --repair-attempts must be between 0 and {MAX_REPAIR_ATTEMPTS}.",
+            file=sys.stderr,
+        )
+        return 2
 
     try:
         session = generate_with_lmstudio(
@@ -402,6 +515,7 @@ def main(argv: list[str] | None = None) -> int:
             output_session=args.output_session,
             timeout=args.timeout,
             model_override=args.model,
+            repair_attempts=args.repair_attempts,
         )
     except (
         OSError,

@@ -177,6 +177,10 @@ def test_lmstudio_generation_saves_valid_json_and_session(
         "ArchSeed.import_json("
     )
     assert saved_session["generator_mode"] == "lmstudio_local_chat_completion"
+    assert saved_session["repair_attempts"] == 0
+    assert saved_session["repair_status"] == "NOT_NEEDED"
+    assert saved_session["repair_messages"] == []
+    assert saved_session["final_validation_status"] == "VALID"
     assert calls == [("GET", "/v1/models"), ("POST", "/v1/chat/completions")]
 
 
@@ -278,6 +282,130 @@ def test_lmstudio_generation_returns_nonzero_on_validation_failure(
     assert session["validation_status"] == "INVALID"
     assert session["validation_message"].startswith("INVALID:")
     assert session["sketchup_import_command"].startswith("ArchSeed.import_json(")
+    assert session["repair_attempts"] == 0
+    assert session["repair_status"] == "NOT_REQUESTED"
+    assert session["final_validation_status"] == "INVALID"
+
+
+def test_lmstudio_generation_repairs_invalid_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invalid_json = {
+        "schemaVersion": "archseed.v0.1",
+        "units": "mm",
+        "project": {"name": "Repair Test"},
+        "building": {
+            "footprint": {"width": -1, "depth": 6000},
+            "levels": [{"name": "Level 1", "height": 3000}],
+        },
+    }
+    repaired_json = copy.deepcopy(invalid_json)
+    repaired_json["building"]["footprint"]["width"] = 8000
+    completion_count = 0
+
+    def fake_request_json(
+        _host: str,
+        _port: int,
+        path: str,
+        *,
+        method: str,
+        payload: dict | None = None,
+        timeout: float,
+    ) -> dict:
+        nonlocal completion_count
+        if path.endswith("/models"):
+            return {"data": [{"id": "local-test-model"}]}
+        completion_count += 1
+        assert method == "POST"
+        assert payload is not None
+        if completion_count == 1:
+            return {
+                "choices": [
+                    {"message": {"content": json.dumps(invalid_json)}}
+                ]
+            }
+        repair_prompt = payload["messages"][0]["content"]
+        assert "Fix only the reported validation error" in repair_prompt
+        assert "Do not return SketchUp Ruby code" in repair_prompt
+        return {
+            "choices": [
+                {"message": {"content": f"```json\n{json.dumps(repaired_json)}\n```"}}
+            ]
+        }
+
+    monkeypatch.setattr(lmstudio_generate, "request_json", fake_request_json)
+    output_json = tmp_path / "generated" / "repaired.v0.1.json"
+    output_session = tmp_path / "draft_sessions" / "repaired.session.json"
+
+    session = generate_with_lmstudio(
+        "repair test",
+        config_path=EXAMPLE_CONFIG_PATH,
+        output_json=output_json,
+        output_session=output_session,
+        repair_attempts=1,
+    )
+
+    assert validate_archseed(json.loads(output_json.read_text(encoding="utf-8")))
+    assert session["validation_status"] == "VALID"
+    assert session["repair_attempts"] == 1
+    assert session["repair_status"] == "SUCCEEDED"
+    assert session["final_validation_status"] == "VALID"
+    assert any("repaired JSON is VALID" in item for item in session["repair_messages"])
+    assert completion_count == 2
+
+
+def test_lmstudio_generation_records_failed_repair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invalid_json = {
+        "schemaVersion": "archseed.v0.1",
+        "units": "mm",
+        "project": {"name": "Still Invalid"},
+        "building": {
+            "footprint": {"width": -1, "depth": 6000},
+            "levels": [{"name": "Level 1", "height": 3000}],
+        },
+    }
+
+    def fake_request_json(
+        _host: str,
+        _port: int,
+        path: str,
+        *,
+        method: str,
+        payload: dict | None = None,
+        timeout: float,
+    ) -> dict:
+        if path.endswith("/models"):
+            return {"data": [{"id": "local-test-model"}]}
+        return {
+            "choices": [
+                {"message": {"content": json.dumps(invalid_json)}}
+            ]
+        }
+
+    monkeypatch.setattr(lmstudio_generate, "request_json", fake_request_json)
+    output_session = tmp_path / "draft_sessions" / "failed.session.json"
+    result = generate_with_lmstudio_main(
+        [
+            "repair failure",
+            "--output-json",
+            str(tmp_path / "generated" / "failed.v0.1.json"),
+            "--output-session",
+            str(output_session),
+            "--repair-attempts",
+            "1",
+        ]
+    )
+
+    assert result == 1
+    session = json.loads(output_session.read_text(encoding="utf-8"))
+    assert session["repair_attempts"] == 1
+    assert session["repair_status"] == "FAILED"
+    assert session["final_validation_status"] == "INVALID"
+    assert any("remains invalid" in item for item in session["repair_messages"])
 
 
 def test_lmstudio_generator_has_no_cloud_secret_or_dangerous_api() -> None:

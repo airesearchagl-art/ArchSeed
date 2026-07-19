@@ -157,11 +157,38 @@ If JSON extraction or validation fails, the CLI exits with a non-zero status and
 writes an `INVALID` session record when possible. Model quality varies, so
 review the generated JSON before importing it into SketchUp.
 
-The draft session workflow remains fully local and deterministic. A future
-integration may use the same output contract before writing generated JSON and
-session records. ArchSeed does not use metered cloud APIs, provider SDKs, API
-keys, or `.env` files in this workflow. Files matching `generated/*.json` and
-`draft_sessions/*.json` remain outside Git management.
+## v0.5 JSON Repair Loop
+
+When local LM Studio generation returns a JSON object that fails ArchSeed
+validation, the generator can make a limited repair attempt using the validator
+error:
+
+```powershell
+python tools/generate_with_lmstudio.py "small office with openings" --output-json generated/lmstudio_small_office_with_openings.v0.1.json --output-session draft_sessions/lmstudio_small_office_with_openings.session.json --repair-attempts 1
+```
+
+The default is `--repair-attempts 0`, so repair is opt-in. Values from 0 through
+3 are accepted. Repair runs only after validation fails, preserves the original
+building intent and openings, and asks the local model to correct only the
+reported validation error. The draft session records `repair_attempts`,
+`repair_status`, `repair_messages`, and `final_validation_status`.
+
+An existing invalid file can also be repaired directly:
+
+```powershell
+python tools/repair_archseed_json.py generated/invalid.v0.1.json "$.building.footprint.width must be > 0 and <= 200000" --output generated/repaired.v0.1.json
+```
+
+Every repaired candidate is saved as data and validated before success is
+reported. The repair loop is not guaranteed to succeed; inspect the validator
+message and repair the JSON manually when all attempts fail. It uses only the
+configured LM Studio server on `localhost` or `127.0.0.1`, with no API key,
+provider SDK, metered cloud API, or executable-code evaluation.
+
+The draft session workflow remains fully local and output-constrained. ArchSeed
+does not use metered cloud APIs, provider SDKs, API keys, or `.env` files in this
+workflow. Files matching `generated/*.json` and `draft_sessions/*.json` remain
+outside Git management.
 
 ## v0.1 Scope
 
