@@ -107,6 +107,45 @@ def test_repair_cli_saves_and_validates_local_response(
     assert json.loads(output_path.read_text(encoding="utf-8")) == valid_archseed_json()
 
 
+def test_repair_cli_accepts_named_validation_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_path = tmp_path / "invalid.json"
+    output_path = tmp_path / "repaired.json"
+    input_path.write_text(json.dumps(invalid_archseed_json()), encoding="utf-8")
+
+    def fake_request_json(
+        _host: str,
+        _port: int,
+        path: str,
+        *,
+        method: str,
+        payload: dict | None = None,
+        timeout: float,
+    ) -> dict:
+        if path.endswith("/models"):
+            return {"data": [{"id": "local-test-model"}]}
+        assert payload is not None
+        assert "repair this fixture" in payload["messages"][0]["content"]
+        return {
+            "choices": [
+                {"message": {"content": json.dumps(valid_archseed_json())}}
+            ]
+        }
+
+    monkeypatch.setattr(repair_module, "request_json", fake_request_json)
+    assert repair_main(
+        [
+            str(input_path),
+            "--validation-error",
+            "repair this fixture",
+            "--output",
+            str(output_path),
+        ]
+    ) == 0
+
+
 def test_repair_rejects_non_local_config_before_request(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

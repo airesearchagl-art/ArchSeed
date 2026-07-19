@@ -136,7 +136,15 @@ def build_parser() -> argparse.ArgumentParser:
         description="Repair invalid ArchSeed JSON with a local LM Studio model."
     )
     parser.add_argument("invalid_json", type=Path, help="Invalid ArchSeed JSON path.")
-    parser.add_argument("validation_error", help="Validator error to repair.")
+    parser.add_argument(
+        "validation_error_positional",
+        nargs="?",
+        help="Validator error to repair (legacy positional form).",
+    )
+    parser.add_argument(
+        "--validation-error",
+        help="Validator error or repair instruction to send to the local model.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--model", help="Optional local LM Studio model id.")
@@ -154,11 +162,22 @@ def main(argv: list[str] | None = None) -> int:
     if not 0 < args.timeout <= 300:
         print("INVALID: --timeout must be greater than 0 and at most 300.", file=sys.stderr)
         return 2
+    if args.validation_error and args.validation_error_positional:
+        print(
+            "INVALID: provide the validation error either positionally or with "
+            "--validation-error, not both.",
+            file=sys.stderr,
+        )
+        return 2
+    validation_error = args.validation_error or args.validation_error_positional
+    if not validation_error:
+        print("INVALID: a validation error message is required.", file=sys.stderr)
+        return 2
 
     try:
         repair_archseed_json(
             args.invalid_json,
-            args.validation_error,
+            validation_error,
             output_path=args.output,
             config_path=args.config,
             timeout=args.timeout,
