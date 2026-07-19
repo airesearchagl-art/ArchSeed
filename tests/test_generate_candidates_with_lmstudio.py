@@ -9,8 +9,11 @@ import pytest
 import tools.generate_candidates_with_lmstudio as candidates_module
 from tools.generate_candidates_with_lmstudio import (
     CandidateGenerationError,
+    build_candidate_summary,
     candidate_count,
+    format_candidate_summary,
     generate_candidates,
+    main as candidates_main,
     select_best_candidate,
 )
 from tools.validate_archseed import ValidationError
@@ -151,6 +154,114 @@ def test_generate_candidates_writes_comparison_session_and_best_json(
     assert not list((tmp_path / "generated").rglob(".candidate_*.session.json"))
 
 
+def summary_session() -> dict:
+    selected_path = "/workspace/generated/candidates/run/candidate_02.v0.1.json"
+    return {
+        "candidate_count": 2,
+        "candidates": [
+            {
+                "candidate_index": 1,
+                "json_path": "/workspace/generated/candidates/run/candidate_01.v0.1.json",
+                "validation_status": "INVALID",
+                "repair_status": "FAILED",
+                "final_validation_status": "INVALID",
+            },
+            {
+                "candidate_index": 2,
+                "json_path": selected_path,
+                "validation_status": "VALID",
+                "repair_status": "NOT_NEEDED",
+                "final_validation_status": "VALID",
+            },
+        ],
+        "selected_candidate": selected_path,
+        "selection_reason": "Selected the earliest unrepaired VALID candidate.",
+        "best_candidate_json_path": (
+            "/workspace/generated/candidates/run/best_candidate.v0.1.json"
+        ),
+        "sketchup_import_command": (
+            'ArchSeed.import_json("/workspace/generated/candidates/run/'
+            'best_candidate.v0.1.json")'
+        ),
+        "session_path": "/workspace/draft_sessions/run.candidates.session.json",
+    }
+
+
+def test_candidate_summary_contains_human_review_fields() -> None:
+    summary = build_candidate_summary(summary_session())
+    rendered = format_candidate_summary(summary)
+
+    assert "Candidate 01" in rendered
+    assert "Candidate 02" in rendered
+    assert "validation_status: VALID" in rendered
+    assert "repair_status: NOT_NEEDED" in rendered
+    assert "selected: yes" in rendered
+    assert "selected_candidate:" in rendered
+    assert "selection_reason:" in rendered
+    assert "sketchup_import_command:" in rendered
+
+
+def test_summary_json_option_writes_concise_comparison(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session = summary_session()
+    summary_path = tmp_path / "draft_sessions" / "candidates.summary.json"
+    monkeypatch.setattr(
+        candidates_module,
+        "generate_candidates",
+        lambda *_args, **_kwargs: session,
+    )
+
+    assert candidates_main(["small office", "--summary-json", str(summary_path)]) == 0
+
+    saved = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert saved["selected_candidate"] == session["selected_candidate"]
+    assert saved["selection_reason"] == session["selection_reason"]
+    assert saved["sketchup_import_command"] == session["sketchup_import_command"]
+    assert saved["candidates"][1]["selected"] is True
+    assert "validation_message" not in saved["candidates"][0]
+    output = capsys.readouterr().out
+    assert f"WROTE SUMMARY: {summary_path}" in output
+    assert "CANDIDATE SUMMARY" in output
+
+
+def test_failed_generation_still_writes_requested_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session = summary_session()
+    session["candidates"] = [session["candidates"][0]]
+    session["candidate_count"] = 1
+    session["selected_candidate"] = None
+    session["selection_reason"] = "No candidate finished with VALID ArchSeed JSON."
+    session["best_candidate_json_path"] = None
+    session["sketchup_import_command"] = ""
+    summary_path = tmp_path / "draft_sessions" / "failed.summary.json"
+
+    def fail_with_session(*_args: object, **_kwargs: object) -> dict:
+        raise CandidateGenerationError(
+            session["selection_reason"],
+            session=session,
+        )
+
+    monkeypatch.setattr(candidates_module, "generate_candidates", fail_with_session)
+    assert candidates_main(
+        ["small office", "--summary-json", str(summary_path)]
+    ) == 1
+
+    saved = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert saved["selected_candidate"] is None
+    assert saved["selection_reason"] == session["selection_reason"]
+    assert saved["sketchup_import_command"] == ""
+    assert saved["candidates"][0]["final_validation_status"] == "INVALID"
+    captured = capsys.readouterr()
+    assert "CANDIDATE SUMMARY" in captured.out
+    assert "Candidate generation failed" in captured.err
+
+
 def test_generate_candidates_rejects_non_local_config_before_generation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -197,7 +308,7 @@ def test_generate_candidates_rejects_when_no_valid_candidate(
         raise ValidationError("fixture")
 
     monkeypatch.setattr(candidates_module, "generate_with_lmstudio", fake_invalid)
-    with pytest.raises(CandidateGenerationError, match="No candidate"):
+    with pytest.raises(CandidateGenerationError, match="No candidate") as exc_info:
         generate_candidates(
             "small office",
             count=2,
@@ -206,6 +317,9 @@ def test_generate_candidates_rejects_when_no_valid_candidate(
             session_root=tmp_path / "sessions",
             run_id="invalid-run",
         )
+
+    assert exc_info.value.session is not None
+    assert exc_info.value.session["selected_candidate"] is None
 
     aggregate = tmp_path / "sessions" / "invalid-run.candidates.session.json"
     saved = json.loads(aggregate.read_text(encoding="utf-8"))
@@ -218,6 +332,9 @@ def test_candidate_outputs_are_ignored_and_source_has_no_unsafe_integration() ->
     assert "generated/*.json" in gitignore
     assert "generated/candidates/**/*.json" in gitignore
     assert "draft_sessions/*.json" in gitignore
+    assert Path("draft_sessions/candidates.summary.json").match(
+        "draft_sessions/*.json"
+    )
 
     source = CLI_PATH.read_text(encoding="utf-8").lower()
     forbidden_tokens = [
