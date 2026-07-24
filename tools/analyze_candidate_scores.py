@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 
-ANALYSIS_VERSION = "0.1"
+ANALYSIS_VERSION = "0.2"
 KNOWN_SCORE_STATUSES = ("COMPLETE", "PARTIAL", "NOT_CALCULATED")
 KNOWN_BREAKDOWN_ITEMS = (
     "base",
@@ -241,7 +241,11 @@ def load_candidate_records(
 
 
 def analyze_score_distribution(records: list[dict[str, Any]]) -> dict[str, Any]:
-    scores = [record["quality_score"] for record in records if record["quality_score"] is not None]
+    scores = [
+        record["quality_score"]
+        for record in records
+        if record["quality_score"] is not None
+    ]
     frequency = Counter(scores)
     if not scores:
         return {
@@ -250,6 +254,7 @@ def analyze_score_distribution(records: list[dict[str, Any]]) -> dict[str, Any]:
             "maximum": None,
             "mean": None,
             "median": None,
+            "standard_deviation": None,
             "unique_score_count": 0,
             "mode_scores": [],
             "mode_count": 0,
@@ -264,6 +269,7 @@ def analyze_score_distribution(records: list[dict[str, Any]]) -> dict[str, Any]:
         "maximum": max(scores),
         "mean": statistics.fmean(scores),
         "median": statistics.median(scores),
+        "standard_deviation": statistics.pstdev(scores),
         "unique_score_count": len(frequency),
         "mode_scores": mode_scores,
         "mode_count": mode_count,
@@ -347,6 +353,9 @@ def analyze_session_ties(documents: list[dict[str, Any]]) -> dict[str, Any]:
             statistics.fmean(unique_counts) if unique_counts else None
         ),
         "sessions_where_all_scored_candidates_equal": all_equal,
+        "all_candidates_equal_session_rate": (
+            all_equal / multiple if multiple else None
+        ),
     }
 
 
@@ -393,6 +402,8 @@ def analyze_selection_relationship(
             tied += 1
         else:
             highest += 1
+    comparable = highest + not_highest + tied
+    agreement = highest + tied
     return {
         "selected_candidate_count": len(selected_records),
         "selected_with_score_count": len(selected_scores),
@@ -407,6 +418,11 @@ def analyze_selection_relationship(
         "sessions_where_selected_did_not_have_highest_score": not_highest,
         "sessions_where_selected_tied_for_highest_score": tied,
         "sessions_where_comparison_not_possible": unavailable,
+        "sessions_with_selected_highest_comparison": comparable,
+        "sessions_where_selected_matched_highest_score": agreement,
+        "selected_highest_agreement_rate": (
+            agreement / comparable if comparable else None
+        ),
     }
 
 
@@ -442,6 +458,12 @@ def analyze_breakdowns(
                 _score_key(value): frequency[value] for value in sorted(frequency)
             },
             "average_points": statistics.fmean(points) if points else None,
+            "minimum_points": min(points) if points else None,
+            "maximum_points": max(points) if points else None,
+            "points_variance": statistics.pvariance(points) if points else None,
+            "points_standard_deviation": (
+                statistics.pstdev(points) if points else None
+            ),
             "missing_count": total_candidate_records - appearances[name],
         }
     return analysis, malformed_record_indexes
@@ -464,6 +486,115 @@ def analyze_warnings(
     }
 
 
+def _known_status_distribution(
+    records: list[dict[str, Any]],
+    key: str,
+) -> dict[str, int]:
+    counts = Counter(record[key] for record in records)
+    distribution = {
+        status: counts[status] for status in KNOWN_SCORE_STATUSES
+    }
+    distribution["UNKNOWN"] = sum(
+        count
+        for status, count in counts.items()
+        if status not in KNOWN_SCORE_STATUSES
+    )
+    return distribution
+
+
+def _validation_distribution(
+    records: list[dict[str, Any]],
+) -> dict[str, int]:
+    counts = Counter(record["final_validation_status"] for record in records)
+    return {
+        "VALID": counts["VALID"],
+        "INVALID": counts["INVALID"],
+        "OTHER_OR_UNKNOWN": sum(
+            count
+            for status, count in counts.items()
+            if status not in ("VALID", "INVALID")
+        ),
+    }
+
+
+def _repair_distribution(
+    records: list[dict[str, Any]],
+) -> dict[str, int]:
+    counts = Counter(record["repair_category"] for record in records)
+    return {
+        category: counts[category]
+        for category in (
+            "WITHOUT_REPAIR",
+            "AFTER_REPAIR",
+            "NOT_NEEDED",
+            "UNKNOWN",
+        )
+    }
+
+
+def _documents_for_version(
+    documents: list[dict[str, Any]],
+    version: str,
+) -> list[dict[str, Any]]:
+    filtered = []
+    for document in documents:
+        records = [
+            record
+            for record in document["records"]
+            if record["quality_score_version"] == version
+        ]
+        if records:
+            filtered.append({**document, "records": records})
+    return filtered
+
+
+def analyze_version_partition(
+    version: str,
+    documents: list[dict[str, Any]],
+) -> dict[str, Any]:
+    version_documents = _documents_for_version(documents, version)
+    records = [
+        record
+        for document in version_documents
+        for record in document["records"]
+    ]
+    score_distribution = analyze_score_distribution(records)
+    breakdown_analysis, malformed_breakdown_indexes = analyze_breakdowns(
+        records, len(records)
+    )
+    malformed_record_indexes = {
+        index for index, record in enumerate(records) if record["malformed"]
+    }
+    malformed_count = len(
+        malformed_record_indexes | malformed_breakdown_indexes
+    )
+    return {
+        "candidates": {
+            "total": len(records),
+            "scored": int(score_distribution["count"]),
+            "unscored": len(records) - int(score_distribution["count"]),
+        },
+        "status_distribution": _known_status_distribution(
+            records, "quality_score_status"
+        ),
+        "metrics_status_distribution": _known_status_distribution(
+            records, "quality_metrics_status"
+        ),
+        "validation_distribution": _validation_distribution(records),
+        "repair_distribution": _repair_distribution(records),
+        "score_distribution": score_distribution,
+        "concentration": analyze_concentration(score_distribution),
+        "session_ties": analyze_session_ties(version_documents),
+        "selection_observation": analyze_selection_relationship(
+            version_documents, records
+        ),
+        "breakdown_analysis": breakdown_analysis,
+        "warning_analysis": analyze_warnings(
+            records, malformed_record_count=malformed_count
+        ),
+    }
+
+
 def build_analysis_report(
     paths: list[Path],
     *,
@@ -473,49 +604,15 @@ def build_analysis_report(
     documents, failed_files = load_candidate_records(paths, cwd=cwd)
     records = [record for document in documents for record in document["records"]]
     total_records = len(records)
-    status_counts = Counter(record["quality_score_status"] for record in records)
-    status_distribution = {
-        status: status_counts[status] for status in KNOWN_SCORE_STATUSES
-    }
-    status_distribution["UNKNOWN"] = sum(
-        count
-        for status, count in status_counts.items()
-        if status not in KNOWN_SCORE_STATUSES
+    status_distribution = _known_status_distribution(
+        records, "quality_score_status"
     )
-    metrics_status_counts = Counter(
-        record["quality_metrics_status"] for record in records
-    )
-    metrics_status_distribution = {
-        status: metrics_status_counts[status] for status in KNOWN_SCORE_STATUSES
-    }
-    metrics_status_distribution["UNKNOWN"] = sum(
-        count
-        for status, count in metrics_status_counts.items()
-        if status not in KNOWN_SCORE_STATUSES
+    metrics_status_distribution = _known_status_distribution(
+        records, "quality_metrics_status"
     )
 
-    validation_counts = Counter(
-        record["final_validation_status"] for record in records
-    )
-    validation_distribution = {
-        "VALID": validation_counts["VALID"],
-        "INVALID": validation_counts["INVALID"],
-        "OTHER_OR_UNKNOWN": sum(
-            count
-            for status, count in validation_counts.items()
-            if status not in ("VALID", "INVALID")
-        ),
-    }
-    repair_counts = Counter(record["repair_category"] for record in records)
-    repair_distribution = {
-        category: repair_counts[category]
-        for category in (
-            "WITHOUT_REPAIR",
-            "AFTER_REPAIR",
-            "NOT_NEEDED",
-            "UNKNOWN",
-        )
-    }
+    validation_distribution = _validation_distribution(records)
+    repair_distribution = _repair_distribution(records)
 
     score_distribution = analyze_score_distribution(records)
     version_counts = Counter(record["quality_score_version"] for record in records)
@@ -530,6 +627,10 @@ def build_analysis_report(
                 if record["quality_score_version"] == version
             ]
         )
+        for version in sorted(version_counts)
+    }
+    analysis_by_score_version = {
+        version: analyze_version_partition(version, documents)
         for version in sorted(version_counts)
     }
     breakdown_analysis, malformed_breakdown_indexes = analyze_breakdowns(
@@ -621,7 +722,13 @@ def build_analysis_report(
         "repair_distribution": repair_distribution,
         "score_version_distribution": score_version_distribution,
         "score_distributions_by_version": score_distributions_by_version,
+        "analysis_by_score_version": analysis_by_score_version,
         "score_distribution_comparability": score_distribution_comparability,
+        "combined_score_distribution_usage": (
+            "DIAGNOSTIC_ONLY_USE_VERSION_PARTITIONS_FOR_COMPARISON"
+            if len(comparison_groups) > 1
+            else "COMPARABLE"
+        ),
         "score_distribution": score_distribution,
         "concentration": analyze_concentration(score_distribution),
         "session_ties": analyze_session_ties(documents),
@@ -672,6 +779,8 @@ def print_analysis_summary(report: dict[str, Any]) -> str:
         f"Maximum: {display(scores['maximum'])}",
         f"Mean: {display(scores['mean'])}",
         f"Median: {display(scores['median'])}",
+        f"Mode: {display(scores['mode_scores'])}",
+        f"Standard deviation: {display(scores['standard_deviation'])}",
         f"Unique scores: {scores['unique_score_count']}",
         f"100-point rate: {display(concentration['score_100_rate'])}",
         f"Most common score: {display(concentration['most_common_score'])}",
@@ -683,9 +792,14 @@ def print_analysis_summary(report: dict[str, Any]) -> str:
         "Sessions:",
         f"Sessions analyzed: {ties['sessions_analyzed']}",
         f"Top-score ties: {ties['sessions_with_top_score_tie']}",
+        f"Top-score tie rate: {display(ties['top_score_tie_rate'])}",
         (
             "All scores equal: "
             f"{ties['sessions_where_all_scored_candidates_equal']}"
+        ),
+        (
+            "All scores equal rate: "
+            f"{display(ties['all_candidates_equal_session_rate'])}"
         ),
         "",
         "Selection observation:",
@@ -705,6 +819,10 @@ def print_analysis_summary(report: dict[str, Any]) -> str:
         (
             "Comparison unavailable: "
             f"{selection['sessions_where_comparison_not_possible']}"
+        ),
+        (
+            "Selected/highest agreement rate: "
+            f"{display(selection['selected_highest_agreement_rate'])}"
         ),
         "",
         "Warnings:",
