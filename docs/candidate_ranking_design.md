@@ -12,6 +12,11 @@ Candidate Quality Score is observational and is not used for selection. The
 score analysis CLI reads saved score fields without regenerating or rescoring
 candidates.
 
+The first real-data distribution contained 9 `VALID`, `COMPLETE` candidates and
+all scored 100. [Candidate Quality Score Policy v2](candidate_score_policy_v2.md)
+is therefore being designed and benchmarked before ranking is reconsidered.
+Scores from different major policy versions must not be directly compared.
+
 ## Metrics To Review Before Ranking
 
 - Rate of candidates scoring 100.
@@ -63,3 +68,6 @@ Future candidates for a separate change include:
 - `quality_score_version`
 - scoring policy ID
 - breakdown schema version
+
+The Policy v2 proposal defines explicit version metadata and version-separated
+analysis. Ranking remains deferred until the v2 distribution is evaluated.
