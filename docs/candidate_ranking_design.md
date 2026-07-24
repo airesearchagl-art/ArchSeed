@@ -12,10 +12,15 @@ Candidate Quality Score is observational and is not used for selection. The
 score analysis CLI reads saved score fields without regenerating or rescoring
 candidates.
 
-The first real-data distribution contained 9 `VALID`, `COMPLETE` candidates and
-all scored 100. [Candidate Quality Score Policy v2](candidate_score_policy_v2.md)
-is now implemented with versioned weighted components. Ranking remains deferred
-until the v2 distribution is evaluated. Scores from different major policy
+The legacy real-data baseline contained 9 `VALID`, `COMPLETE` candidates and all
+scored 100. [Candidate Quality Score Policy v2](candidate_score_policy_v2.md)
+is implemented with versioned weighted components. Its first comparable
+real-data run also produced 9 `VALID`, `COMPLETE` candidates that all scored
+100. Every v2 component had zero point variance. See
+[Score Policy v1/v2 Distribution Comparison](score_policy_v1_v2_distribution.md).
+
+Ranking remains deferred because Policy v2 did not improve score concentration
+or session ties in the tested dataset. Scores from different major policy
 versions must not be directly compared.
 
 ## Metrics To Review Before Ranking
@@ -60,16 +65,13 @@ The following are design questions, not implemented rules:
 
 ## Score Versioning
 
-Analysis reports use `analysis_version: "0.1"`. Existing Candidate Quality Score
-records do not have an explicit score version, and the analyzer does not infer
-one. The current score storage structure remains unchanged.
+Analysis reports use `analysis_version: "0.2"`. Legacy Candidate Quality Score
+records without explicit version metadata remain `unversioned`; the analyzer
+does not infer a version or rewrite saved data. Policy v2 records explicit score
+version, scoring policy, and breakdown schema metadata. Analysis separates
+records into version partitions and treats a combined mixed-group distribution
+as diagnostic only.
 
-Future candidates for a separate change include:
-
-- `quality_score_version`
-- scoring policy ID
-- breakdown schema version
-
-Policy v2 records explicit version metadata, and analysis separates records by
-version. The current selector remains unchanged, and score is not used for
-selection before the v2 distribution review.
+The current selector remains unchanged, and score is not used for selection.
+Policy adjustment and a new distribution review are required before a separate
+Ranking Policy can be considered.

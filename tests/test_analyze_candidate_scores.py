@@ -27,6 +27,7 @@ def candidate(
     score: float | None,
     *,
     score_status: str = "COMPLETE",
+    metrics_status: str = "COMPLETE",
     validation: str = "VALID",
     repair: str | None = "NOT_NEEDED",
     selected: bool | None = None,
@@ -38,7 +39,7 @@ def candidate(
         "candidate_index": index,
         "json_path": f"C:/private/user/generated/candidate_{index:02d}.json",
         "final_validation_status": validation,
-        "quality_metrics_status": "COMPLETE",
+        "quality_metrics_status": metrics_status,
         "quality_score": score,
         "quality_score_status": score_status,
         "quality_score_breakdown": breakdown
@@ -188,6 +189,7 @@ def test_score_distribution_statistics_and_frequency() -> None:
     assert result["maximum"] == 100
     assert result["mean"] == 90
     assert result["median"] == 90
+    assert result["standard_deviation"] == pytest.approx(7.0710678118654755)
     assert result["unique_score_count"] == 3
     assert result["score_frequency"] == {"80": 1, "90": 2, "100": 1}
 
@@ -219,6 +221,9 @@ def test_v2_score_records_are_analyzed_by_version(tmp_path: Path) -> None:
         "96": 1,
         "100": 1,
     }
+    partition = report["analysis_by_score_version"]["2.0"]
+    assert partition["candidates"] == {"total": 2, "scored": 2, "unscored": 0}
+    assert partition["score_distribution"]["standard_deviation"] == 2
 
 
 def test_mixed_unversioned_and_v2_scores_warn_without_inference(
@@ -272,6 +277,9 @@ def test_mixed_major_versions_warn_and_remain_separate(tmp_path: Path) -> None:
     assert any(
         "Multiple quality score major versions" in warning
         for warning in report["analysis_warnings"]
+    )
+    assert report["combined_score_distribution_usage"] == (
+        "DIAGNOSTIC_ONLY_USE_VERSION_PARTITIONS_FOR_COMPARISON"
     )
 
 
@@ -327,6 +335,7 @@ def test_session_top_tie_and_all_scores_equal(tmp_path: Path) -> None:
     assert ties["sessions_with_top_score_tie"] == 1
     assert ties["top_score_tie_rate"] == 0.5
     assert ties["sessions_where_all_scored_candidates_equal"] == 1
+    assert ties["all_candidates_equal_session_rate"] == 0.5
     assert ties["average_unique_scores_per_session"] == 1.5
 
 
@@ -356,6 +365,13 @@ def test_selected_candidate_relationship(
     observation = report["selection_observation"]
     assert observation[expected_key] == 1
     assert observation["selected_candidate_count"] == 1
+    expected_agreement = (
+        0 if expected_key.endswith("not_have_highest_score") else 1
+    )
+    assert observation["sessions_where_selected_matched_highest_score"] == (
+        expected_agreement
+    )
+    assert observation["selected_highest_agreement_rate"] == expected_agreement
 
 
 def test_selected_comparison_unavailable_without_scored_selection(tmp_path: Path) -> None:
@@ -393,6 +409,101 @@ def test_breakdown_analysis_includes_known_and_unknown_items(tmp_path: Path) -> 
     assert analysis["base"]["average_points"] == 50
     assert analysis["future_item"]["points_frequency"] == {"7.5": 1}
     assert analysis["future_item"]["missing_count"] == 1
+    assert analysis["base"]["points_variance"] == 0
+
+
+def test_component_points_variance_is_reported_per_version(
+    tmp_path: Path,
+) -> None:
+    report = report_for(
+        tmp_path,
+        (
+            "v2.session.json",
+            [
+                candidate(
+                    1,
+                    90,
+                    score_version="2.0",
+                    breakdown={
+                        "geometry_plausibility": {
+                            "points": 10,
+                            "max_points": 20,
+                        }
+                    },
+                ),
+                candidate(
+                    2,
+                    100,
+                    score_version="2.0",
+                    breakdown={
+                        "geometry_plausibility": {
+                            "points": 20,
+                            "max_points": 20,
+                        }
+                    },
+                ),
+            ],
+            True,
+            2,
+        ),
+    )
+    component = report["analysis_by_score_version"]["2.0"][
+        "breakdown_analysis"
+    ]["geometry_plausibility"]
+    assert component["points_frequency"] == {"10": 1, "20": 1}
+    assert component["average_points"] == 15
+    assert component["points_variance"] == 25
+    assert component["points_standard_deviation"] == 5
+
+
+def test_version_partition_handles_mixed_score_and_metrics_statuses(
+    tmp_path: Path,
+) -> None:
+    report = report_for(
+        tmp_path,
+        (
+            "mixed-status.session.json",
+            [
+                candidate(
+                    1,
+                    100,
+                    score_version="2.0",
+                    score_status="COMPLETE",
+                    metrics_status="COMPLETE",
+                ),
+                candidate(
+                    2,
+                    65,
+                    score_version="2.0",
+                    score_status="PARTIAL",
+                    metrics_status="PARTIAL",
+                ),
+                candidate(
+                    3,
+                    None,
+                    score_version="2.0",
+                    score_status="NOT_CALCULATED",
+                    metrics_status="NOT_CALCULATED",
+                    validation="INVALID",
+                ),
+            ],
+            True,
+            1,
+        ),
+    )
+    partition = report["analysis_by_score_version"]["2.0"]
+    assert partition["status_distribution"] == {
+        "COMPLETE": 1,
+        "PARTIAL": 1,
+        "NOT_CALCULATED": 1,
+        "UNKNOWN": 0,
+    }
+    assert partition["metrics_status_distribution"] == {
+        "COMPLETE": 1,
+        "PARTIAL": 1,
+        "NOT_CALCULATED": 1,
+        "UNKNOWN": 0,
+    }
 
 
 def test_warning_frequency_and_path_sanitization(tmp_path: Path) -> None:
@@ -459,6 +570,7 @@ def test_null_only_scores_have_empty_distribution_warning(tmp_path: Path) -> Non
     )
     assert report["score_distribution"]["count"] == 0
     assert report["score_distribution"]["mean"] is None
+    assert report["score_distribution"]["standard_deviation"] is None
     assert report["concentration"]["score_100_rate"] is None
     assert any("No finite" in warning for warning in report["analysis_warnings"])
 
@@ -507,9 +619,12 @@ def test_stdout_summary_contains_major_sections(tmp_path: Path) -> None:
         "Input files:",
         "Candidate records:",
         "Minimum:",
+        "Standard deviation:",
         "100-point rate:",
         "Sessions analyzed:",
+        "All scores equal rate:",
         "Selected candidates:",
+        "Selected/highest agreement rate:",
         "Warnings:",
     ):
         assert text in output

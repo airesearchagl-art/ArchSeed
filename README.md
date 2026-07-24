@@ -377,17 +377,20 @@ python tools/analyze_candidate_scores.py --input "draft_sessions/*.summary.json"
 ```
 
 The report includes candidate counts; score status, validation, and repair
-distributions; minimum, maximum, mean, median, modes, frequencies, and 100-point
-concentration; session tie observations; selected-score comparisons; breakdown
-statistics; and warning frequencies. Integer scores use keys such as `"100"`.
+distributions; minimum, maximum, mean, median, modes, population standard
+deviation, frequencies, and 100-point concentration; session tie observations;
+selected/highest agreement; breakdown point frequencies and population
+variance; and warning frequencies. Integer scores use keys such as `"100"`.
 Finite non-integer scores use Python's stable shortest round-trip representation,
 such as `"82.5"`, so distinct stored floats are not intentionally rounded into
 one bucket. Boolean, NaN, and infinite values are not treated as scores.
 
 Policy v2 records are also grouped by `quality_score_version`. Legacy records
 without that field remain `unversioned`. Mixed versions produce separate
-version distributions and a warning; session tie and selected-score comparisons
-do not directly compare candidates carrying different score versions.
+version partitions and a warning. The combined distribution is diagnostic only
+when comparison groups differ; use `analysis_by_score_version` for formal
+comparison. Session tie and selected-score comparisons do not directly compare
+candidates carrying different major score versions.
 
 Full Candidate Session JSON files have a reliable session boundary and are used
 for tie and selected-candidate comparisons. Candidate Summary JSON records still
@@ -407,6 +410,11 @@ existing ignore rule. The analysis does not change Candidate Quality Score,
 does not affect best-candidate selection, and cannot establish regulatory
 compliance or architectural quality. Ranking remains a separate future change;
 see `docs/candidate_ranking_design.md` for the decision inputs.
+
+The first Policy v2 real-data comparison is recorded in
+[Score Policy v1/v2 Distribution Comparison](docs/score_policy_v1_v2_distribution.md).
+The tested v2 dataset remained concentrated at 100 points, so Ranking remains
+deferred and Quality Score remains unused by best-candidate selection.
 
 ## v0.1 Scope
 
