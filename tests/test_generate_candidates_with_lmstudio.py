@@ -157,11 +157,26 @@ def test_generate_candidates_writes_comparison_session_and_best_json(
         "footprint_area"
     ] == pytest.approx(48_000_000.0)
     assert saved_session["candidates"][0]["quality_score_status"] == "COMPLETE"
-    assert saved_session["candidates"][0]["quality_score"] == 80
-    assert saved_session["candidates"][1]["quality_score"] == 85
+    assert saved_session["candidates"][0]["quality_score"] == 65
+    assert saved_session["candidates"][1]["quality_score"] == 75
+    assert saved_session["candidates"][1]["quality_score_version"] == "2.0"
+    assert (
+        saved_session["candidates"][1]["scoring_policy_id"]
+        == "archseed-static-geometry"
+    )
+    assert saved_session["candidates"][1]["scoring_policy_version"] == "2.0"
+    assert saved_session["candidates"][1]["breakdown_schema_version"] == "2"
     assert saved_session["candidates"][1]["quality_score_breakdown"][
-        "repair"
-    ]["points"] == 10
+        "repair_stability"
+    ]["points"] == 15
+    summary = build_candidate_summary(saved_session)
+    assert summary["candidates"][1]["quality_score_version"] == "2.0"
+    assert summary["candidates"][1]["scoring_policy_version"] == "2.0"
+    assert summary["candidates"][1]["quality_score_raw"] == 75
+    assert summary["selected_quality_score_version"] == "2.0"
+    summary_path = tmp_path / "draft_sessions" / "v2.summary.json"
+    candidates_module.write_json(summary_path, summary)
+    assert json.loads(summary_path.read_text(encoding="utf-8")) == summary
     assert not list((tmp_path / "generated").rglob(".candidate_*.session.json"))
 
 
@@ -256,6 +271,7 @@ def test_candidate_summary_contains_human_review_fields() -> None:
     assert "quality_metrics_status: COMPLETE" in rendered
     assert "quality_score: 100" in rendered
     assert "quality_score_status: COMPLETE" in rendered
+    assert "quality_score_version: unversioned" in rendered
     assert "quality_score_used_for_selection: no" in rendered
     assert "selected: yes" in rendered
     assert "selected_candidate:" in rendered
@@ -277,7 +293,7 @@ def test_quality_score_inherits_partial_metrics_status() -> None:
         },
     }
     candidates_module._add_quality_score(record)
-    assert record["quality_score"] == 100
+    assert record["quality_score"] == 85
     assert record["quality_score_status"] == "PARTIAL"
     assert record["quality_score_warnings"]
 
@@ -308,7 +324,9 @@ def test_summary_json_option_writes_concise_comparison(
     assert saved["candidates"][1]["quality_score"] == 100
     assert saved["candidates"][1]["quality_score_status"] == "COMPLETE"
     assert saved["candidates"][1]["quality_score_breakdown"]["base"]["points"] == 50
+    assert saved["candidates"][1]["quality_score_version"] is None
     assert saved["selected_quality_score"] == 100
+    assert saved["selected_quality_score_version"] is None
     assert "validation_message" not in saved["candidates"][0]
     output = capsys.readouterr().out
     assert f"WROTE SUMMARY: {summary_path}" in output

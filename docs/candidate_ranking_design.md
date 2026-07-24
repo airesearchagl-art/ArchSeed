@@ -14,8 +14,9 @@ candidates.
 
 The first real-data distribution contained 9 `VALID`, `COMPLETE` candidates and
 all scored 100. [Candidate Quality Score Policy v2](candidate_score_policy_v2.md)
-is therefore being designed and benchmarked before ranking is reconsidered.
-Scores from different major policy versions must not be directly compared.
+is now implemented with versioned weighted components. Ranking remains deferred
+until the v2 distribution is evaluated. Scores from different major policy
+versions must not be directly compared.
 
 ## Metrics To Review Before Ranking
 
@@ -69,5 +70,6 @@ Future candidates for a separate change include:
 - scoring policy ID
 - breakdown schema version
 
-The Policy v2 proposal defines explicit version metadata and version-separated
-analysis. Ranking remains deferred until the v2 distribution is evaluated.
+Policy v2 records explicit version metadata, and analysis separates records by
+version. The current selector remains unchanged, and score is not used for
+selection before the v2 distribution review.

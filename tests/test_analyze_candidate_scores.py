@@ -32,6 +32,7 @@ def candidate(
     selected: bool | None = None,
     warnings: list[str] | None = None,
     breakdown: dict | None = None,
+    score_version: str | None = None,
 ) -> dict:
     record = {
         "candidate_index": index,
@@ -53,6 +54,8 @@ def candidate(
         record["repair_status"] = repair
     if selected is not None:
         record["selected"] = selected
+    if score_version is not None:
+        record["quality_score_version"] = score_version
     return record
 
 
@@ -187,6 +190,113 @@ def test_score_distribution_statistics_and_frequency() -> None:
     assert result["median"] == 90
     assert result["unique_score_count"] == 3
     assert result["score_frequency"] == {"80": 1, "90": 2, "100": 1}
+
+
+def test_unversioned_score_records_remain_unversioned(tmp_path: Path) -> None:
+    report = report_for(
+        tmp_path,
+        ("legacy.json", [candidate(1, 100)], True, 1),
+    )
+    assert report["score_version_distribution"] == {"unversioned": 1}
+    assert report["score_distributions_by_version"]["unversioned"]["count"] == 1
+
+
+def test_v2_score_records_are_analyzed_by_version(tmp_path: Path) -> None:
+    report = report_for(
+        tmp_path,
+        (
+            "v2.json",
+            [
+                candidate(1, 96, score_version="2.0"),
+                candidate(2, 100, score_version="2.0"),
+            ],
+            True,
+            1,
+        ),
+    )
+    assert report["score_version_distribution"] == {"2.0": 2}
+    assert report["score_distributions_by_version"]["2.0"]["score_frequency"] == {
+        "96": 1,
+        "100": 1,
+    }
+
+
+def test_mixed_unversioned_and_v2_scores_warn_without_inference(
+    tmp_path: Path,
+) -> None:
+    report = report_for(
+        tmp_path,
+        (
+            "mixed.json",
+            [
+                candidate(1, 100),
+                candidate(2, 96, score_version="2.0"),
+            ],
+            True,
+            1,
+        ),
+    )
+    assert report["score_version_distribution"] == {
+        "2.0": 1,
+        "unversioned": 1,
+    }
+    assert any(
+        "Versioned and unversioned" in warning
+        for warning in report["analysis_warnings"]
+    )
+
+
+def test_mixed_major_versions_warn_and_remain_separate(tmp_path: Path) -> None:
+    report = report_for(
+        tmp_path,
+        (
+            "versions.json",
+            [
+                candidate(1, 100, score_version="1.0"),
+                candidate(2, 96, score_version="2.0"),
+            ],
+            True,
+            1,
+        ),
+    )
+    assert set(report["score_distributions_by_version"]) == {"1.0", "2.0"}
+    assert report["score_distribution_comparability"] == (
+        "MIXED_VERSIONS_NOT_DIRECTLY_COMPARABLE"
+    )
+    assert report["session_ties"][
+        "sessions_excluded_for_mixed_score_versions"
+    ] == 1
+    assert report["selection_observation"][
+        "sessions_where_comparison_not_possible"
+    ] == 1
+    assert any(
+        "Multiple quality score major versions" in warning
+        for warning in report["analysis_warnings"]
+    )
+
+
+def test_same_major_versions_remain_comparable_but_separately_reported(
+    tmp_path: Path,
+) -> None:
+    report = report_for(
+        tmp_path,
+        (
+            "minor-versions.json",
+            [
+                candidate(1, 96, score_version="2.0"),
+                candidate(2, 98, score_version="2.1"),
+            ],
+            True,
+            2,
+        ),
+    )
+    assert set(report["score_distributions_by_version"]) == {"2.0", "2.1"}
+    assert report["score_distribution_comparability"] == (
+        "COMPARABLE_WITHIN_MAJOR_VERSION"
+    )
+    assert report["session_ties"][
+        "sessions_excluded_for_mixed_score_versions"
+    ] == 0
 
 
 def test_concentration_and_most_common_score(tmp_path: Path) -> None:
