@@ -348,6 +348,12 @@ The score is not used by the v0.7 best-candidate selector. Selection still uses
 only final validation, no-repair preference, and generation order. Any future
 use of the score for ranking requires a separate design and pull request.
 
+The current score policy is treated as v1-equivalent and has no explicit stored
+version. In the first real-data analysis, all 9 candidates scored 100, so
+[Candidate Quality Score Policy v2](docs/candidate_score_policy_v2.md) is being
+designed before any ranking change. Policy v2 is not implemented, Quality Score
+remains unused by best-candidate selection, and ranking remains unimplemented.
+
 ## v0.7 Candidate Quality Score Analysis
 
 The local score analysis CLI aggregates saved Candidate Session JSON and
