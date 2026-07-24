@@ -23,6 +23,11 @@ KNOWN_BREAKDOWN_ITEMS = (
     "window",
     "aspect_ratio",
     "opening_ratio",
+    "structural_validity",
+    "metrics_completeness",
+    "repair_stability",
+    "opening_completeness",
+    "geometry_plausibility",
 )
 LOCAL_PATH_PATTERN = re.compile(r"(?<!\w)(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
 
@@ -87,6 +92,19 @@ def normalize_repair_status(candidate: dict[str, Any]) -> str:
     return "UNKNOWN"
 
 
+def normalize_score_version(candidate: dict[str, Any]) -> str:
+    version = candidate.get("quality_score_version")
+    if isinstance(version, str) and version.strip():
+        return version.strip()
+    return "unversioned"
+
+
+def score_comparison_group(version: str) -> str:
+    if version == "unversioned":
+        return version
+    return version.split(".", 1)[0]
+
+
 def normalize_candidate_record(
     candidate: Any,
     *,
@@ -102,6 +120,7 @@ def normalize_candidate_record(
             "quality_metrics_status": "UNKNOWN",
             "quality_score": None,
             "quality_score_status": "UNKNOWN",
+            "quality_score_version": "unversioned",
             "selected": False,
             "quality_score_breakdown": {},
             "quality_score_warnings": [],
@@ -163,6 +182,7 @@ def normalize_candidate_record(
         "quality_metrics_status": metrics_status,
         "quality_score": score,
         "quality_score_status": score_status,
+        "quality_score_version": normalize_score_version(candidate),
         "selected": selected,
         "quality_score_breakdown": breakdown,
         "quality_score_warnings": warnings,
@@ -287,13 +307,25 @@ def analyze_concentration(score_distribution: dict[str, Any]) -> dict[str, Any]:
 def analyze_session_ties(documents: list[dict[str, Any]]) -> dict[str, Any]:
     sessions = [doc for doc in documents if doc["session_analyzable"]]
     files_without_boundary = len(documents) - len(sessions)
-    multiple = ties = all_equal = 0
+    multiple = ties = all_equal = mixed_versions = 0
     unique_counts: list[int] = []
     for document in sessions:
-        scores = [
-            record["quality_score"]
+        scored_records = [
+            record
             for record in document["records"]
             if record["quality_score"] is not None
+        ]
+        if len(
+            {
+                score_comparison_group(record["quality_score_version"])
+                for record in scored_records
+            }
+        ) > 1:
+            mixed_versions += 1
+            continue
+        scores = [
+            record["quality_score"]
+            for record in scored_records
         ]
         if scores:
             unique_counts.append(len(set(scores)))
@@ -307,6 +339,7 @@ def analyze_session_ties(documents: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "sessions_analyzed": len(sessions),
         "files_without_session_boundary": files_without_boundary,
+        "sessions_excluded_for_mixed_score_versions": mixed_versions,
         "sessions_with_multiple_scored_candidates": multiple,
         "sessions_with_top_score_tie": ties,
         "top_score_tie_rate": ties / multiple if multiple else None,
@@ -331,10 +364,22 @@ def analyze_selection_relationship(
     for document in documents:
         if not document["session_analyzable"]:
             continue
-        scores = [
-            record["quality_score"]
+        scored_records = [
+            record
             for record in document["records"]
             if record["quality_score"] is not None
+        ]
+        if len(
+            {
+                score_comparison_group(record["quality_score_version"])
+                for record in scored_records
+            }
+        ) > 1:
+            unavailable += 1
+            continue
+        scores = [
+            record["quality_score"]
+            for record in scored_records
         ]
         selected = [record for record in document["records"] if record["selected"]]
         if len(selected) != 1 or selected[0]["quality_score"] is None or not scores:
@@ -473,6 +518,20 @@ def build_analysis_report(
     }
 
     score_distribution = analyze_score_distribution(records)
+    version_counts = Counter(record["quality_score_version"] for record in records)
+    score_version_distribution = {
+        version: version_counts[version] for version in sorted(version_counts)
+    }
+    score_distributions_by_version = {
+        version: analyze_score_distribution(
+            [
+                record
+                for record in records
+                if record["quality_score_version"] == version
+            ]
+        )
+        for version in sorted(version_counts)
+    }
     breakdown_analysis, malformed_breakdown_indexes = analyze_breakdowns(
         records, total_records
     )
@@ -516,6 +575,29 @@ def build_analysis_report(
             f"{malformed_records} malformed candidate record(s) contained fields "
             "that were excluded from affected calculations."
         )
+    versioned_majors = {
+        version.split(".", 1)[0]
+        for version in version_counts
+        if version != "unversioned"
+    }
+    comparison_groups = {
+        score_comparison_group(version) for version in version_counts
+    }
+    score_distribution_comparability = (
+        "COMPARABLE_WITHIN_MAJOR_VERSION"
+        if len(comparison_groups) <= 1
+        else "MIXED_VERSIONS_NOT_DIRECTLY_COMPARABLE"
+    )
+    if len(versioned_majors) > 1:
+        analysis_warnings.append(
+            "Multiple quality score major versions are present; compare their "
+            "version-specific distributions separately."
+        )
+    if "unversioned" in version_counts and len(version_counts) > 1:
+        analysis_warnings.append(
+            "Versioned and unversioned quality scores are both present; no version "
+            "was inferred for legacy records."
+        )
 
     return {
         "analysis_version": ANALYSIS_VERSION,
@@ -537,6 +619,9 @@ def build_analysis_report(
         "metrics_status_distribution": metrics_status_distribution,
         "validation_distribution": validation_distribution,
         "repair_distribution": repair_distribution,
+        "score_version_distribution": score_version_distribution,
+        "score_distributions_by_version": score_distributions_by_version,
+        "score_distribution_comparability": score_distribution_comparability,
         "score_distribution": score_distribution,
         "concentration": analyze_concentration(score_distribution),
         "session_ties": analyze_session_ties(documents),
@@ -559,6 +644,7 @@ def print_analysis_summary(report: dict[str, Any]) -> str:
     concentration = report["concentration"]
     ties = report["session_ties"]
     selection = report["selection_observation"]
+    versions = report["score_version_distribution"]
 
     def display(value: Any) -> str:
         return "N/A" if value is None else str(value)
@@ -571,6 +657,12 @@ def print_analysis_summary(report: dict[str, Any]) -> str:
         f"Failed files: {inputs['failed_file_count']}",
         f"Candidate records: {candidates['total']}",
         f"Scored: {candidates['scored']}",
+        (
+            "Score versions: "
+            + ", ".join(
+                f"{version}={count}" for version, count in versions.items()
+            )
+        ),
         f"Complete: {statuses['COMPLETE']}",
         f"Partial: {statuses['PARTIAL']}",
         f"Not calculated: {statuses['NOT_CALCULATED']}",

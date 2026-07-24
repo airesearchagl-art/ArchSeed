@@ -188,16 +188,10 @@ def _add_quality_score(record: dict[str, Any]) -> None:
         record.get("quality_metrics"),
         str(record.get("final_validation_status", "INVALID")),
         str(record.get("repair_status", "NOT_APPLICABLE")),
+        metrics_status=str(
+            record.get("quality_metrics_status", "NOT_CALCULATED")
+        ),
     )
-    if (
-        record.get("quality_metrics_status") == "PARTIAL"
-        and score["quality_score_status"] == "COMPLETE"
-    ):
-        score["quality_score_status"] = "PARTIAL"
-        score["quality_score_warnings"] = [
-            "Candidate quality metrics are PARTIAL; the score uses only available values.",
-            *score["quality_score_warnings"],
-        ]
     record.update(score)
 
 
@@ -332,6 +326,7 @@ def build_candidate_summary(session: dict[str, Any]) -> dict[str, Any]:
                     "quality_metrics_warnings", []
                 ),
                 "quality_score": candidate.get("quality_score"),
+                "quality_score_raw": candidate.get("quality_score_raw"),
                 "quality_score_status": candidate.get(
                     "quality_score_status", "NOT_CALCULATED"
                 ),
@@ -340,6 +335,16 @@ def build_candidate_summary(session: dict[str, Any]) -> dict[str, Any]:
                 ),
                 "quality_score_warnings": candidate.get(
                     "quality_score_warnings", []
+                ),
+                "quality_score_version": candidate.get(
+                    "quality_score_version"
+                ),
+                "scoring_policy_id": candidate.get("scoring_policy_id"),
+                "scoring_policy_version": candidate.get(
+                    "scoring_policy_version"
+                ),
+                "breakdown_schema_version": candidate.get(
+                    "breakdown_schema_version"
                 ),
             }
         )
@@ -360,6 +365,11 @@ def build_candidate_summary(session: dict[str, Any]) -> dict[str, Any]:
         "sketchup_import_command": session.get("sketchup_import_command", ""),
         "selected_quality_score": (
             selected_record.get("quality_score") if selected_record else None
+        ),
+        "selected_quality_score_version": (
+            selected_record.get("quality_score_version")
+            if selected_record
+            else None
         ),
     }
 
@@ -395,6 +405,26 @@ def format_candidate_summary(summary: dict[str, Any]) -> str:
                     "  quality_score_status: "
                     f"{candidate.get('quality_score_status')}"
                 ),
+                (
+                    "  quality_score_version: "
+                    f"{candidate.get('quality_score_version') or 'unversioned'}"
+                ),
+                (
+                    "  scoring_policy: "
+                    f"{candidate.get('scoring_policy_id') or 'unversioned'}"
+                    f"@{candidate.get('scoring_policy_version') or 'unversioned'}"
+                ),
+                (
+                    "  quality_score_components: "
+                    + ", ".join(
+                        f"{name}={component.get('points')}/"
+                        f"{component.get('max_points')}"
+                        for name, component in candidate.get(
+                            "quality_score_breakdown", {}
+                        ).items()
+                        if isinstance(component, dict)
+                    )
+                ),
                 f"  selected: {'yes' if candidate['selected'] else 'no'}",
                 f"  json_path: {candidate['json_path']}",
             ]
@@ -405,6 +435,10 @@ def format_candidate_summary(summary: dict[str, Any]) -> str:
             f"  selected_candidate: {summary['selected_candidate']}",
             f"  selection_reason: {summary['selection_reason']}",
             f"  quality_score: {summary.get('selected_quality_score')}",
+            (
+                "  quality_score_version: "
+                f"{summary.get('selected_quality_score_version') or 'unversioned'}"
+            ),
             "  quality_score_used_for_selection: no",
             (
                 "  sketchup_import_command: "

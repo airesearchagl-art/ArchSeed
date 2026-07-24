@@ -1,8 +1,33 @@
 # Candidate Quality Score Policy v2 Design
 
-Status: Draft proposal. This document defines design constraints and evaluation
-work for a future implementation. It does not change scoring, ranking, or best
-candidate selection.
+Status: Initial Policy v2 implementation completed. Weights and soft ranges are
+provisional until fixture and real-data distribution review. Ranking and best
+candidate selection remain unchanged.
+
+## Implementation Status
+
+The initial implementation uses these weighted components:
+
+- structural validity: 30 points
+- metrics completeness: 20 points
+- repair stability: 15 points
+- opening completeness: 15 points
+- geometry plausibility: 20 points
+
+It records score version `2.0`, policy ID `archseed-static-geometry`, policy
+version `2.0`, and breakdown schema version `2`. Candidate Session and Summary
+records preserve the component breakdown and warnings.
+
+Initial geometry soft ranges are implemented as proposed:
+
+- aspect ratio: preferred 0.50 through 2.00; fallback 0.33 up to 0.50 and
+  above 2.00 through 3.00; extreme 0.20 up to 0.33 and above 3.00 through 5.00
+- opening-to-wall-area ratio: preferred 0.05 through 0.40; fallback 0.01 up
+  to 0.05 and above 0.40 through 0.60; extreme above 0 up to 0.01 and above
+  0.60 through 0.80
+
+These ranges remain draft static heuristics. LM Studio real-data distribution
+has not been regenerated or reanalyzed for Policy v2.
 
 ## 1. Background
 
@@ -231,9 +256,10 @@ It most clearly separates component availability, component quality, and
 maximum contribution. It also gives the analysis workflow useful component
 variance.
 
-Final weights and thresholds are intentionally not fixed in this design PR.
-The available real dataset is too small and too concentrated. Proposed values
-must first be exercised against the fixtures and benchmark plan below.
+The initial implementation fixes the component weights and soft ranges listed
+above so deterministic fixtures can be evaluated. Their long-term adoption is
+not final: the available real dataset is too small and concentrated, and the
+values must be reviewed against the fixtures and benchmark plan below.
 
 ## 6. Score Status Comparison
 
@@ -308,7 +334,7 @@ an implicit component.
 
 ## 10. Score Version Design
 
-Proposed metadata:
+Implemented metadata:
 
 ```json
 {
@@ -333,11 +359,13 @@ Version rules:
 - never rewrite historical candidate/session JSON during migration
 - any rescoring must be an explicit CLI or separate workflow
 
-The exact metadata placement and serialization are deferred to implementation.
+The metadata is stored alongside each candidate's existing score fields in
+Candidate Session and Candidate Summary records. Historical records remain
+unchanged and unversioned.
 
 ## 11. Breakdown Schema v2
 
-Proposed component shape:
+Implemented component shape:
 
 ```json
 {
@@ -374,8 +402,8 @@ Required design behavior:
 - `calculated_at` is unnecessary for deterministic equality and should remain
   session metadata unless an audit requirement is identified
 
-The current flat component mapping is not assumed compatible with v2. Migration
-must preserve v1 records and let readers branch by version.
+The v2 component mapping is versioned separately from the legacy flat
+breakdown. Readers preserve v1 records and branch by version.
 
 ## 12. Draft Score Meaning
 
@@ -476,7 +504,8 @@ No order is adopted or implemented by this PR.
 ## 17. Migration Plan
 
 1. Finalize this Policy v2 design.
-2. Implement Policy v2 and versioned serialization in a separate PR.
+2. Implement Policy v2 and versioned serialization. Completed by the initial
+   Policy v2 implementation.
 3. Compare v1 and v2 score distributions on fixtures and benchmark data.
 4. Design Ranking Policy only after reviewing those results.
 5. Implement ranking or expand benchmarks in a later PR.

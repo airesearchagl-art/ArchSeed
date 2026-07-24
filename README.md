@@ -308,51 +308,52 @@ order remains unchanged: valid candidates without repair rank first, repaired
 valid candidates rank next, and generation order breaks ties. A future version
 may use reviewed metrics in ranking, but no metric affects selection yet.
 
-## v0.7 Candidate Quality Score
+## v0.7 Candidate Quality Score Policy v2
 
-Candidate Quality Score converts the deterministic quality metrics into an
-explainable observation score from 0 to 100. It uses no LLM judgment or external
-API. The same metrics, validation status, and repair status always produce the
-same score. Each candidate session and optional summary JSON records the score,
-status, warnings, and a point-by-point breakdown.
+Policy v2 converts deterministic candidate metrics into a prompt-independent
+observation score from 0 to 100. It uses five weighted components:
 
-The initial score starts at 50 points and applies these components:
+- structural validity: 30 points
+- metrics completeness: 20 points
+- repair stability: 15 points
+- opening completeness: 15 points
+- geometry plausibility: 20 points
 
-- validation: `VALID` adds 20 points. A non-`VALID` candidate is not scored.
-- repair: `VALID` without repair adds 10 points; `VALID` after repair adds 5.
-- door observation: at least one door adds 5 points.
-- window observation: at least one window adds 5 points.
-- aspect ratio: 1.0 through 2.0 adds 5 points; above 2.0 through 3.0
-  adds 2; above 3.0 subtracts 5. A value below 1.0 is left unchanged,
-  receives no points, and produces a warning.
-- opening-to-wall-area ratio: above 0 through 0.40 adds 5 points; 0 or
-  above 0.40 through 0.60 adds no points; above 0.60 subtracts 10.
-- footprint area: a positive value is required for a complete score but does
-  not add points.
+The initial geometry soft ranges are draft heuristics. Aspect ratios from 0.50
+through 2.00 receive the preferred 10 points, fallback ranges receive 6,
+extreme ranges receive 2, and values outside those ranges receive 0.
+Opening-to-wall-area ratios from 0.05 through 0.40 receive the preferred 10
+points, with corresponding fallback and extreme ranges through 0.80.
 
-The final score is clamped to 0 through 100. Missing values are not inferred and
-do not receive points. `quality_score_status` is `COMPLETE` when every scored
-input is available, `PARTIAL` when available components were scored but one or
-more inputs or statuses were unavailable, and `NOT_CALCULATED` for a non-`VALID`
-candidate. Reasons are stored in `quality_score_breakdown`; missing or unusual
-inputs are stored in `quality_score_warnings`. Scores are not rescaled to 100
-when inputs are missing.
+New Candidate Session and Candidate Summary records include:
 
-Door and window points are observations for the current sample-building model;
-they do not mean that either opening type is required. The opening ratio is a
-simple extreme-value heuristic, not a building-code check. Candidate Quality
-Score does not establish regulatory compliance or prove that one architectural
-design is better than another.
+- `quality_score_version: "2.0"`
+- `scoring_policy_id: "archseed-static-geometry"`
+- `scoring_policy_version: "2.0"`
+- `breakdown_schema_version: "2"`
 
-The score is not used by the v0.7 best-candidate selector. Selection still uses
-only final validation, no-repair preference, and generation order. Any future
-use of the score for ranking requires a separate design and pull request.
+Each breakdown component records its points, maximum points, status, reasons,
+and source metric values. `quality_score_raw` preserves the pre-clamp component
+sum. Warnings remain separate from deductions. Missing values are not inferred.
+`PARTIAL` scores retain each component's maximum and are not re-normalized.
+Non-`VALID` candidates and candidates without usable metrics remain
+`NOT_CALCULATED` with a null numeric score.
 
-The current score policy is treated as v1-equivalent and has no explicit stored
-version. In the first real-data analysis, all 9 candidates scored 100, so
-[Candidate Quality Score Policy v2](docs/candidate_score_policy_v2.md) is being
-designed before any ranking change. Policy v2 is not implemented, Quality Score
-remains unused by best-candidate selection, and ranking remains unimplemented.
+Door and window observations do not mean either opening type is universally
+required. The soft ranges do not account for prompt intent, building use,
+region, or regulations. Policy v2 does not establish regulatory compliance or
+guarantee architectural quality. Initial weights and ranges remain subject to
+fixture and real-data distribution review.
+
+Legacy score records without version fields remain unversioned and are not
+rewritten or assigned an inferred version. See
+[Candidate Quality Score Policy v2](docs/candidate_score_policy_v2.md) for the
+implementation policy and migration constraints.
+
+Quality Score remains unused by best-candidate selection. Selection still uses
+final validation, no-repair preference, and generation order. Ranking is not
+implemented and will not be considered until v2 score distributions are
+reviewed.
 
 ## v0.7 Candidate Quality Score Analysis
 
@@ -382,6 +383,11 @@ statistics; and warning frequencies. Integer scores use keys such as `"100"`.
 Finite non-integer scores use Python's stable shortest round-trip representation,
 such as `"82.5"`, so distinct stored floats are not intentionally rounded into
 one bucket. Boolean, NaN, and infinite values are not treated as scores.
+
+Policy v2 records are also grouped by `quality_score_version`. Legacy records
+without that field remain `unversioned`. Mixed versions produce separate
+version distributions and a warning; session tie and selected-score comparisons
+do not directly compare candidates carrying different score versions.
 
 Full Candidate Session JSON files have a reliable session boundary and are used
 for tie and selected-candidate comparisons. Candidate Summary JSON records still
